@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Claude Logger</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --accent-dim: rgba(124, 106, 247, 0.15);
+    --text: #e8e8f0;
+    --text-dim: #8888aa;
+    --text-muted: #55556a;
+    --success: #4ade80;
+    --error: #f87171;
+    --warning: #fbbf24;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg); color: var(--text);
+    height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  #setup {
+    display: flex; flex-direction: column; height: 100dvh;
+    overflow-y: auto; padding: 24px 20px 40px; gap: 20px;
+  }
+
+  .setup-header { text-align: center; padding: 20px 0 10px; }
+
+  .logo {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    border-radius: 16px; margin: 0 auto 16px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+    box-shadow: 0 8px 32px rgba(124,106,247,0.4);
+  }
+
+  .setup-header h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--text), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .setup-header p { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+
+  .saved-badge {
+    background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 12px; padding: 12px 16px; font-size: 12px; color: var(--success);
+  }
+
+  .setup-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .setup-card h2 { font-size: 13px; font-weight: 500; color: var(--accent2); letter-spacing: 0.5px; text-transform: uppercase; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--text-dim); }
+
+  .field input {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; font-size: 14px; color: var(--text);
+    font-family: 'JetBrains Mono', monospace; outline: none; width: 100%; transition: border-color 0.2s;
+  }
+
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--text-muted); font-family: 'Noto Sans JP', sans-serif; }
+
+  .start-btn {
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    color: white; border: none; border-radius: 14px; padding: 16px;
+    font-size: 16px; font-weight: 700; font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer; width: 100%; box-shadow: 0 4px 24px rgba(124,106,247,0.4);
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .start-btn:active { opacity: 0.85; transform: scale(0.98); }
+
+  #chat { display: none; flex-direction: column; height: 100dvh; }
+
+  .chat-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+
+  .chat-header-left { display: flex; align-items: center; gap: 10px; }
+
+  .header-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+
+  .header-title { font-size: 15px; font-weight: 600; }
+  .header-sub { font-size: 11px; color: var(--text-dim); }
+  .header-btns { display: flex; gap: 8px; }
+
+  .icon-btn {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-dim); border-radius: 9px; padding: 7px 10px;
+    font-size: 14px; cursor: pointer;
+  }
+
+  .save-btn {
+    background: var(--accent-dim); border: 1px solid rgba(124,106,247,0.3);
+    color: var(--accent2); border-radius: 10px; padding: 8px 14px;
+    font-size: 13px; font-weight: 600; font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .save-btn:active { opacity: 0.7; }
+  .save-btn.saving { opacity: 0.5; }
+
+  .topic-bar {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 8px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+
+  .topic-bar label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+  #topicInput {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-size: 13px; color: var(--text-dim); font-family: 'Noto Sans JP', sans-serif;
+  }
+
+  #topicInput::placeholder { color: var(--text-muted); }
+
+  .new-chat-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 8px; padding: 5px 10px; font-size: 11px;
+    font-family: 'Noto Sans JP', sans-serif; cursor: pointer;
+  }
+
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch;
+  }
+
+  .message { display: flex; flex-direction: column; gap: 4px; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user { align-items: flex-end; }
+  .message.assistant { align-items: flex-start; }
+  .msg-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; padding: 0 4px; }
+
+  .msg-bubble {
+    max-width: 85%; padding: 12px 15px; border-radius: 16px;
+    font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+  }
+
+  .message.user .msg-bubble {
+    background: linear-gradient(135deg, #2d1f6e, #3d2a8a);
+    border: 1px solid rgba(124,106,247,0.3); border-bottom-right-radius: 4px; color: #d4ccff;
+  }
+
+  .message.assistant .msg-bubble {
+    background: var(--surface); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px; color: var(--text);
+  }
+
+  .typing { display: flex; gap: 4px; padding: 14px 16px; }
+  .typing span { width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%,60%,100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  .input-area {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0;
+  }
+
+  #userInput {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 11px 14px; font-size: 15px; color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif; outline: none; resize: none;
+    max-height: 120px; line-height: 1.5; transition: border-color 0.2s;
+  }
+
+  #userInput:focus { border-color: var(--accent); }
+  #userInput::placeholder { color: var(--text-muted); }
+
+  .send-btn {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    border: none; border-radius: 12px; color: white; font-size: 18px;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 12px rgba(124,106,247,0.4); transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .send-btn:active { opacity: 0.8; transform: scale(0.95); }
+  .send-btn:disabled { opacity: 0.4; }
+
+  .toast {
+    position: fixed; bottom: 100px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 18px; font-size: 13px;
+    opacity: 0; transition: all 0.3s; z-index: 100; white-space: nowrap; pointer-events: none;
+  }
+
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: rgba(74,222,128,0.3); color: var(--success); }
+  .toast.error { border-color: rgba(248,113,113,0.3); color: var(--error); }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 200; align-items: flex-end; justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0; padding: 24px 20px 40px;
+    width: 100%; max-height: 80dvh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px; animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .modal-header { display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+
+  .modal-close {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 8px; width: 32px; height: 32px; font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+
+  .danger-btn {
+    background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2);
+    color: var(--error); border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 500;
+    font-family: 'Noto Sans JP', sans-serif; cursor: pointer; width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="setup-header">
+    <div class="logo">🧠</div>
+    <h1>Claude Logger</h1>
+    <p>会話を自動でGitHubに保存するアプリ</p>
+  </div>
+
+  <div id="savedBadge" class="saved-badge" style="display:none">
+    ✅ 設定が保存されています。そのままチャット開始できます。
+  </div>
+
+  <div class="setup-card">
+    <h2>🔑 Anthropic API</h2>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <h2>🐙 GitHub 設定</h2>
+    <div class="field">
+      <label>GitHub Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_..." autocomplete="off">
+    </div>
+    <div class="field">
+      <label>ユーザー名</label>
+      <input type="text" id="ghUser" placeholder="kna1967" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>リポジトリ名</label>
+      <input type="text" id="ghRepo" placeholder="obsidian-vault" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>保存フォルダ</label>
+      <input type="text" id="ghFolder" placeholder="claude-logs" autocomplete="off">
+    </div>
+  </div>
+
+  <button class="start-btn" onclick="startChat()">チャットを開始する →</button>
+</div>
+
+<div id="chat">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="header-logo">🧠</div>
+      <div>
+        <div class="header-title">Claude Logger</div>
+        <div class="header-sub" id="msgCount">0 メッセージ</div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" onclick="openSettings()">⚙️</button>
+      <button class="save-btn" id="saveBtn" onclick="saveToGitHub()">💾 保存</button>
+    </div>
+  </div>
+
+  <div class="topic-bar">
+    <label>テーマ：</label>
+    <input type="text" id="topicInput" placeholder="今日のトピック（任意）">
+    <button class="new-chat-btn" onclick="newChat()">新規</button>
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="input-area">
+    <textarea id="userInput" rows="1" placeholder="メッセージを入力..."
+      oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal" onclick="closeSettingsOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙️ 設定</h2>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="setup-card">
+      <h2>🔑 Anthropic API</h2>
+      <div class="field">
+        <label>API Key</label>
+        <input type="password" id="m_apiKey" placeholder="sk-ant-..." autocomplete="off">
+      </div>
+    </div>
+    <div class="setup-card">
+      <h2>🐙 GitHub 設定</h2>
+      <div class="field">
+        <label>GitHub Token</label>
+        <input type="password" id="m_ghToken" placeholder="ghp_..." autocomplete="off">
+      </div>
+      <div class="field">
+        <label>ユーザー名</label>
+        <input type="text" id="m_ghUser" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>リポジトリ名</label>
+        <input type="text" id="m_ghRepo" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>保存フォルダ</label>
+        <input type="text" id="m_ghFolder" autocomplete="off">
+      </div>
+    </div>
+    <button class="start-btn" onclick="saveSettings()">💾 設定を保存</button>
+    <button class="danger-btn" onclick="clearSettings()">🗑️ 設定をリセット</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let config = {};
+let messages = [];
+let isLoading = false;
+
+window.addEventListener('load', () => {
+  const saved = loadConfig();
+  if (saved) {
+    config = saved;
+    document.getElementById('apiKey').value = '（保存済み）';
+    document.getElementById('ghToken').value = '（保存済み）';
+    document.getElementById('ghUser').value = saved.ghUser;
+    document.getElementById('ghRepo').value = saved.ghRepo;
+    document.getElementById('ghFolder').value = saved.ghFolder;
+    document.getElementById('savedBadge').style.display = 'block';
+    showChat();
+  }
+});
+
+function loadConfig() {
+  try { const r = localStorage.getItem('claude_logger_config'); return r ? JSON.parse(r) : null; }
+  catch(e) { return null; }
+}
+
+function saveConfig(cfg) {
+  try { localStorage.setItem('claude_logger_config', JSON.stringify(cfg)); }
+  catch(e) { showToast('設定の保存に失敗しました', 'error'); }
+}
+
+function startChat() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const ghToken = document.getElementById('ghToken').value.trim();
+  const ghUser = document.getElementById('ghUser').value.trim();
+  const ghRepo = document.getElementById('ghRepo').value.trim();
+  const ghFolder = document.getElementById('ghFolder').value.trim();
+
+  const useApiKey = apiKey === '（保存済み）' ? config.apiKey : apiKey;
+  const useGhToken = ghToken === '（保存済み）' ? config.ghToken : ghToken;
+
+  if (!useApiKey || !useGhToken || !ghUser || !ghRepo) {
+    showToast('全ての項目を入力してください', 'error'); return;
+  }
+
+  config = { apiKey: useApiKey, ghToken: useGhToken, ghUser, ghRepo, ghFolder: ghFolder || 'claude-logs' };
+  saveConfig(config);
+  showChat();
+}
+
+function showChat() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('chat').style.display = 'flex';
+  if (messages.length === 0) {
+    addSystemMessage('こんにちは！何でも話しかけてください。\n会話が終わったら「💾 保存」でGitHubに自動保存されます。');
+  }
+}
+
+function openSettings() {
+  document.getElementById('m_apiKey').value = config.apiKey ? '（保存済み）' : '';
+  document.getElementById('m_ghToken').value = config.ghToken ? '（保存済み）' : '';
+  document.getElementById('m_ghUser').value = config.ghUser || '';
+  document.getElementById('m_ghRepo').value = config.ghRepo || '';
+  document.getElementById('m_ghFolder').value = config.ghFolder || '';
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
+
+function closeSettingsOutside(e) {
+  if (e.target === document.getElementById('settingsModal')) closeSettings();
+}
+
+function saveSettings() {
+  const apiKey = document.getElementById('m_apiKey').value.trim();
+  const ghToken = document.getElementById('m_ghToken').value.trim();
+  config = {
+    apiKey: apiKey === '（保存済み）' ? config.apiKey : apiKey,
+    ghToken: ghToken === '（保存済み）' ? config.ghToken : ghToken,
+    ghUser: document.getElementById('m_ghUser').value.trim() || config.ghUser,
+    ghRepo: document.getElementById('m_ghRepo').value.trim() || config.ghRepo,
+    ghFolder: document.getElementById('m_ghFolder').value.trim() || config.ghFolder,
+  };
+  saveConfig(config);
+  closeSettings();
+  showToast('✅ 設定を保存しました', 'success');
+}
+
+function clearSettings() {
+  if (!confirm('設定をリセットしますか？')) return;
+  localStorage.removeItem('claude_logger_config');
+  config = {}; messages = [];
+  document.getElementById('messages').innerHTML = '';
+  closeSettings();
+  document.getElementById('chat').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+  document.getElementById('apiKey').value = '';
+  document.getElementById('ghToken').value = '';
+  document.getElementById('savedBadge').style.display = 'none';
+}
+
+function addSystemMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'message assistant';
+  div.innerHTML = `<div class="msg-label">Claude</div><div class="msg-bubble">${text}</div>`;
+  document.getElementById('messages').appendChild(div);
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text || isLoading) return;
+
+  input.value = ''; input.style.height = 'auto';
+  isLoading = true; document.getElementById('sendBtn').disabled = true;
+
+  messages.push({ role: 'user', content: text });
+  appendMessage('user', text); updateCount();
+
+  const typingEl = document.createElement('div');
+  typingEl.className = 'message assistant'; typingEl.id = 'typing';
+  typingEl.innerHTML = `<div class="msg-label">Claude</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('messages').appendChild(typingEl);
+  scrollBottom();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: 'あなたは親切で知識豊富なAIアシスタントです。日本語で会話してください。',
+        messages: messages
+      })
+    });
+
+    const data = await res.json();
+    document.getElementById('typing')?.remove();
+
+    if (data.content?.[0]) {
+      const reply = data.content[0].text;
+      messages.push({ role: 'assistant', content: reply });
+      appendMessage('assistant', reply); updateCount();
+    } else {
+      showToast('エラー: ' + (data.error?.message || '不明'), 'error');
+    }
+  } catch(e) {
+    document.getElementById('typing')?.remove();
+    showToast('通信エラー: ' + e.message, 'error');
+  }
+
+  isLoading = false; document.getElementById('sendBtn').disabled = false; scrollBottom();
+}
+
+function appendMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  div.innerHTML = `<div class="msg-label">${role==='user'?'あなた':'Claude'}</div><div class="msg-bubble">${escapeHtml(text)}</div>`;
+  document.getElementById('messages').appendChild(div); scrollBottom();
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function scrollBottom() {
+  const el = document.getElementById('messages');
+  setTimeout(() => el.scrollTop = el.scrollHeight, 50);
+}
+
+function updateCount() {
+  document.getElementById('msgCount').textContent = `${messages.length} メッセージ`;
+}
+
+async function saveToGitHub() {
+  if (messages.length === 0) { showToast('保存する会話がありません', 'error'); return; }
+
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = '保存中...'; btn.classList.add('saving');
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5).replace(':','');
+  const topic = document.getElementById('topicInput').value.trim() || '会話ログ';
+  const fileName = `${dateStr}_${timeStr}_${topic.replace(/[^\w\u3040-\u9FFF]/g,'-')}.md`;
+  const filePath = `${config.ghFolder}/${fileName}`;
+
+  const firstUser = messages.find(m=>m.role==='user');
+  const lastAI = [...messages].reverse().find(m=>m.role==='assistant');
+  let summary = '';
+  if (firstUser) summary += `最初の質問: ${firstUser.content.slice(0,100)}...\n\n`;
+  if (lastAI) summary += `主な回答: ${lastAI.content.slice(0,200)}...`;
+
+  const tags = ['#claude','#ai-log', `#${topic.replace(/\s+/g,'-')}`,
+    `#${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`].join(' ');
+
+  let md = `# ${topic}\n\n## メタ情報\n\n- **日時**: ${now.toLocaleString('ja-JP')}\n- **メッセージ数**: ${messages.length}\n- **タグ**: ${tags}\n\n## 要約\n\n${summary}\n\n---\n\n## 会話ログ\n\n`;
+  for (const msg of messages) {
+    md += `### ${msg.role==='user'?'**自分**':'**Claude**'}\n\n${msg.content}\n\n`;
+  }
+  md += `---\n*Saved by Claude Logger*\n`;
+
+  const content = btoa(unescape(encodeURIComponent(md)));
+
+  try {
+    let sha = null;
+    try {
+      const check = await fetch(`https://api.github.com/repos/${config.ghUser}/${config.ghRepo}/contents/${filePath}`,
+        { headers: { 'Authorization': `token ${config.ghToken}` } });
+      if (check.ok) { sha = (await check.json()).sha; }
+    } catch(e) {}
+
+    const res = await fetch(`https://api.github.com/repos/${config.ghUser}/${config.ghRepo}/contents/${filePath}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${config.ghToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `📝 ${topic} - ${dateStr}`, content, ...(sha&&{sha}) })
+    });
+
+    if (res.ok) showToast('✅ GitHubに保存しました！', 'success');
+    else { const err = await res.json(); showToast('❌ ' + (err.message||'保存失敗'), 'error'); }
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+
+  btn.textContent = '💾 保存'; btn.classList.remove('saving');
+}
+
+function newChat() {
+  if (messages.length > 0 && !confirm('新しい会話を始めますか？')) return;
+  messages = [];
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('topicInput').value = '';
+  updateCount();
+  addSystemMessage('新しい会話を始めます！');
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type} show`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+</script>
+</body>
+</html>
