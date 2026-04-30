@@ -284,6 +284,14 @@
   <div class="home-title">Claude Logger</div>
   <div class="home-sub">AIと会話、記録、共有</div>
 
+  <button class="home-btn" id="resumeBtn" onclick="resumeLastRoom()" style="display:none; border-color: var(--success); background: rgba(74,222,128,0.05);">
+    <div class="home-btn-icon" style="background: rgba(74,222,128,0.15);">🔄</div>
+    <div class="home-btn-text">
+      <div class="home-btn-title">前回のルームに戻る</div>
+      <div class="home-btn-desc" id="resumeBtnDesc">復帰します</div>
+    </div>
+  </button>
+
   <button class="home-btn primary" onclick="goto('soloSetup')">
     <div class="home-btn-icon">💬</div>
     <div class="home-btn-text">
@@ -417,9 +425,9 @@
   <div class="setup-card">
     <h2>🔑 ルームID</h2>
     <div class="field">
-      <input type="text" id="join_roomId" placeholder="ABC123" style="text-transform: uppercase; font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; font-size: 18px;" autocomplete="off">
+      <input type="text" id="join_roomId" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="847203" style="font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; font-size: 18px;" autocomplete="off">
       <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-        💡 ホストから送られた6文字のIDを入力してください
+        💡 ホストから送られた6桁の数字IDを入力してください
       </div>
     </div>
   </div>
@@ -484,6 +492,11 @@
             <input type="checkbox" id="aiEnabledToggle" onchange="updateAiEnabled()">
             <span class="slider"></span>
           </label>
+        </div>
+
+        <div class="field">
+          <label>AIの名前</label>
+          <input type="text" id="s_aiName" placeholder="Claude" autocomplete="off">
         </div>
 
         <div class="field">
@@ -577,12 +590,9 @@
     </div>
 
     <div style="font-size: 12px; color: var(--text-muted); padding: 8px; line-height: 1.7;">
-      💡 招待メッセージには<br>
-      ・アプリのURL<br>
-      ・ルームID<br>
-      が入っています。LINEやiMessageで送ってください。<br>
+      💡 招待メッセージにはルームID付きの招待リンクが入っています。LINEやiMessageで送ってください。<br>
       <br>
-      受け取った人は、URLを開いて「ルームに参加」をタップし、ルームIDを入れるだけで参加できます。
+      受け取った人は、リンクを開いて表示名を入れるだけで参加できます（ルームIDは自動入力）。
     </div>
   </div>
 </div>
@@ -635,6 +645,7 @@ const state = {
   judgeModel: 'haiku',
   replyModel: 'sonnet',
   aiEnabled: true,
+  aiName: 'Claude',
   ghToken: null,
   ghUser: null,
   ghRepo: null,
@@ -675,6 +686,162 @@ function saveToStorage(key, value) {
 function loadFromStorage(key) {
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; }
   catch(e) { return null; }
+}
+
+function saveLastRoom() {
+  if (!state.mode) return;
+  const data = {
+    mode: state.mode,
+    roomId: state.roomId,
+    userName: state.userName,
+    isHost: state.isHost,
+    topic: state.topic,
+    savedAt: new Date().toISOString()
+  };
+  try { localStorage.setItem('cl_lastRoom', JSON.stringify(data)); }
+  catch(e) { console.warn('lastRoom save failed', e); }
+}
+
+function loadLastRoom() {
+  try {
+    const r = localStorage.getItem('cl_lastRoom');
+    return r ? JSON.parse(r) : null;
+  } catch(e) { return null; }
+}
+
+function clearLastRoom() {
+  try { localStorage.removeItem('cl_lastRoom'); } catch(e) {}
+}
+
+function checkResumeButton() {
+  const last = loadLastRoom();
+  const btn = document.getElementById('resumeBtn');
+  const desc = document.getElementById('resumeBtnDesc');
+  if (!btn) return;
+  if (last) {
+    let label = '';
+    if (last.mode === 'solo') label = `ソロチャット${last.userName ? ' · ' + last.userName : ''}`;
+    else if (last.mode === 'host') label = `ホスト · ルーム ${last.roomId}`;
+    else if (last.mode === 'guest') label = `参加中 · ルーム ${last.roomId}`;
+    if (desc) desc.textContent = label;
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function resumeLastRoom() {
+  const last = loadLastRoom();
+  if (!last) {
+    showToast('前回のルーム情報が見つかりません', 'error');
+    return;
+  }
+
+  if (last.mode === 'solo') {
+    const cfg = loadFromStorage('cl_solo');
+    if (!cfg || !cfg.apiKey) {
+      showToast('設定が見つかりません。最初から始めてください', 'error');
+      clearLastRoom();
+      checkResumeButton();
+      return;
+    }
+    state.mode = 'solo';
+    state.apiKey = cfg.apiKey;
+    state.userName = last.userName || 'あなた';
+    state.ghToken = cfg.ghToken;
+    state.ghUser = cfg.ghUser;
+    state.ghRepo = cfg.ghRepo;
+    state.ghFolder = cfg.ghFolder || 'claude-logs';
+    if (cfg.aiName) state.aiName = cfg.aiName;
+    if (cfg.systemPrompt) state.systemPrompt = cfg.systemPrompt;
+    if (cfg.chattiness !== undefined) state.chattiness = cfg.chattiness;
+    if (cfg.cooldown !== undefined) state.cooldown = cfg.cooldown;
+    if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
+    if (cfg.replyModel) state.replyModel = cfg.replyModel;
+    state.messages = [];
+    state.isHost = true;
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    enterChatScreen();
+    showToast('ソロチャットに復帰しました', 'success');
+    return;
+  }
+
+  if (last.mode === 'host') {
+    const cfg = loadFromStorage('cl_host');
+    if (!cfg || !cfg.apiKey) {
+      showToast('設定が見つかりません。最初から始めてください', 'error');
+      clearLastRoom();
+      checkResumeButton();
+      return;
+    }
+    state.mode = 'host';
+    state.apiKey = cfg.apiKey;
+    state.userName = last.userName || cfg.userName;
+    state.roomId = last.roomId;
+    state.isHost = true;
+    state.ghToken = cfg.ghToken;
+    state.ghUser = cfg.ghUser;
+    state.ghRepo = cfg.ghRepo;
+    state.ghFolder = cfg.ghFolder || 'claude-logs';
+    if (cfg.aiName) state.aiName = cfg.aiName;
+    if (cfg.systemPrompt) state.systemPrompt = cfg.systemPrompt;
+    if (cfg.chattiness !== undefined) state.chattiness = cfg.chattiness;
+    if (cfg.cooldown !== undefined) state.cooldown = cfg.cooldown;
+    if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
+    if (cfg.replyModel) state.replyModel = cfg.replyModel;
+    state.messages = [];
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    try {
+      initFirebase();
+      const metaSnap = await state.metaRef.once('value');
+      if (!metaSnap.exists()) {
+        showToast('ルームが見つかりません。新規作成してください', 'error');
+        clearLastRoom();
+        checkResumeButton();
+        return;
+      }
+      await state.participantsRef.child(state.userName).set({ joinedAt: Date.now(), isHost: true });
+      state.participantsRef.child(state.userName).onDisconnect().remove();
+      subscribeToRoom();
+      enterChatScreen();
+      showToast('ホストとして復帰しました', 'success');
+    } catch(e) {
+      console.error(e);
+      showToast('復帰エラー: ' + e.message, 'error');
+    }
+    return;
+  }
+
+  if (last.mode === 'guest') {
+    state.mode = 'guest';
+    state.userName = last.userName;
+    state.roomId = last.roomId;
+    state.isHost = false;
+    state.apiKey = null;
+    state.messages = [];
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    try {
+      initFirebase();
+      const metaSnap = await state.metaRef.once('value');
+      if (!metaSnap.exists()) {
+        showToast('ルームが見つかりません', 'error');
+        clearLastRoom();
+        checkResumeButton();
+        return;
+      }
+      await state.participantsRef.child(state.userName).set({ joinedAt: Date.now(), isHost: false });
+      state.participantsRef.child(state.userName).onDisconnect().remove();
+      subscribeToRoom();
+      enterChatScreen();
+      showToast('ルームに復帰しました', 'success');
+    } catch(e) {
+      console.error(e);
+      showToast('復帰エラー: ' + e.message, 'error');
+    }
+  }
 }
 
 function loadSoloSettings() {
@@ -728,6 +895,12 @@ function startSolo() {
   state.ghUser = cfg.ghUser;
   state.ghRepo = cfg.ghRepo;
   state.ghFolder = cfg.ghFolder;
+  if (saved.aiName) state.aiName = saved.aiName;
+  if (saved.systemPrompt) state.systemPrompt = saved.systemPrompt;
+  if (saved.chattiness !== undefined) state.chattiness = saved.chattiness;
+  if (saved.cooldown !== undefined) state.cooldown = saved.cooldown;
+  if (saved.judgeModel) state.judgeModel = saved.judgeModel;
+  if (saved.replyModel) state.replyModel = saved.replyModel;
   state.messages = [];
   state.isHost = true;
   state.aiEnabled = true;
@@ -762,6 +935,12 @@ async function createRoom() {
   state.ghUser = cfg.ghUser;
   state.ghRepo = cfg.ghRepo;
   state.ghFolder = cfg.ghFolder;
+  if (saved.aiName) state.aiName = saved.aiName;
+  if (saved.systemPrompt) state.systemPrompt = saved.systemPrompt;
+  if (saved.chattiness !== undefined) state.chattiness = saved.chattiness;
+  if (saved.cooldown !== undefined) state.cooldown = saved.cooldown;
+  if (saved.judgeModel) state.judgeModel = saved.judgeModel;
+  if (saved.replyModel) state.replyModel = saved.replyModel;
   state.messages = [];
   state.aiEnabled = true;
   try {
@@ -771,6 +950,7 @@ async function createRoom() {
       createdAt: Date.now(),
       topic: '',
       aiEnabled: true,
+      aiName: state.aiName,
       systemPrompt: state.systemPrompt,
       chattiness: state.chattiness,
       cooldown: state.cooldown,
@@ -791,9 +971,10 @@ async function createRoom() {
 
 async function joinRoom() {
   const name = document.getElementById('join_name').value.trim();
-  const roomId = document.getElementById('join_roomId').value.trim().toUpperCase();
+  const roomId = document.getElementById('join_roomId').value.trim();
   if (!name) { showToast('表示名を入力してください', 'error'); return; }
   if (!roomId) { showToast('ルームIDを入力してください', 'error'); return; }
+  if (!/^\d{6}$/.test(roomId)) { showToast('ルームIDは6桁の数字です', 'error'); return; }
   saveToStorage('cl_join', { userName: name });
   state.mode = 'guest';
   state.userName = name;
@@ -821,10 +1002,7 @@ async function joinRoom() {
 }
 
 function generateRoomId() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let id = '';
-  for (let i=0; i<6; i++) id += chars[Math.floor(Math.random()*chars.length)];
-  return id;
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 function initFirebase() {
@@ -865,12 +1043,15 @@ function subscribeToRoom() {
     }
     if (!state.isHost) {
       state.aiEnabled = meta.aiEnabled !== false;
+      state.aiName = meta.aiName || state.aiName;
       state.systemPrompt = meta.systemPrompt || state.systemPrompt;
       state.chattiness = meta.chattiness ?? state.chattiness;
       state.cooldown = meta.cooldown ?? state.cooldown;
       state.judgeModel = meta.judgeModel || state.judgeModel;
       state.replyModel = meta.replyModel || state.replyModel;
       updateAiStatusDisplay();
+    } else if (meta.aiName) {
+      state.aiName = meta.aiName;
     }
   });
 }
@@ -895,20 +1076,21 @@ function enterChatScreen() {
   if (state.messages.length === 0 && state.mode === 'solo') {
     const welcomeMsg = {
       sender: 'Claude', role: 'assistant',
-      text: 'こんにちは！何でも話しかけてください。',
+      text: `こんにちは！${state.aiName && state.aiName !== 'Claude' ? state.aiName + 'です。' : ''}何でも話しかけてください。`,
       timestamp: Date.now(), _key: 'welcome_' + Date.now()
     };
     state.messages.push(welcomeMsg);
     renderMessage(welcomeMsg);
     updateCount();
   }
+  saveLastRoom();
 }
 
 function renderMessage(msg) {
   const div = document.createElement('div');
   let klass = 'message ';
   let label = '';
-  if (msg.sender === 'Claude') { klass += 'ai'; label = '🤖 Claude'; }
+  if (msg.sender === 'Claude') { klass += 'ai'; label = '🤖 ' + (state.aiName || 'Claude'); }
   else if (msg.sender === state.userName || state.mode === 'solo') { klass += 'me'; label = msg.sender; }
   else { klass += 'other'; label = msg.sender; }
   div.className = klass;
@@ -998,7 +1180,7 @@ async function callClaudeDirect(userText) {
       body: JSON.stringify({
         model: MODEL_IDS[state.replyModel],
         max_tokens: 2048,
-        system: state.systemPrompt,
+        system: buildAiSystemPrompt(state.systemPrompt),
         messages: apiMessages
       })
     });
@@ -1025,7 +1207,7 @@ function showTypingIndicator() {
   const el = document.createElement('div');
   el.className = 'message ai';
   el.id = 'typing_' + Date.now();
-  el.innerHTML = `<div class="msg-label"><span class="name">🤖 Claude</span></div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  el.innerHTML = `<div class="msg-label"><span class="name">🤖 ${escapeHtml(state.aiName || 'Claude')}</span></div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
   document.getElementById('messages').appendChild(el);
   scrollBottom();
   return el;
@@ -1147,12 +1329,24 @@ function showDebug(msg) {
 }
 
 
+function buildAiSystemPrompt(basePrompt) {
+  const aiName = state.aiName || 'Claude';
+  const base = basePrompt || '';
+  if (aiName === 'Claude') return base;
+  const replaced = base.replace(/Claude/g, aiName);
+  return `あなたの名前は${aiName}です。以前は Claude と名乗っていましたが、今は${aiName}と名乗ってください。\n\n${replaced}`;
+}
+
 function buildJudgePrompt(recentMsgs) {
-  const convo = recentMsgs.map(m => `[${m.sender}]: ${m.text}`).join('\n');
+  const aiName = state.aiName || 'Claude';
+  const convo = recentMsgs.map(m => {
+    const displayName = m.sender === 'Claude' ? aiName : m.sender;
+    return `[${displayName}]: ${m.text}`;
+  }).join('\n');
   const config = CHATTINESS_CONFIG[state.chattiness];
   return {
-    system: `あなたは会話に参加しているAI「Claude」です。直近の会話を見て、今あなたが発言するべきかどうかを判定します。\n判定基準: ${config.judgePrompt}\n回答は必ず "YES" または "NO" の一語のみで答えてください。説明は不要です。`,
-    user: `直近の会話:\n${convo}\n\n今、Claudeが発言すべき？`
+    system: `あなたは会話に参加しているAI「${aiName}」です。直近の会話を見て、今あなたが発言するべきかどうかを判定します。\n判定基準: ${config.judgePrompt}\n回答は必ず "YES" または "NO" の一語のみで答えてください。説明は不要です。`,
+    user: `直近の会話:\n${convo}\n\n今、${aiName}が発言すべき？`
   };
 }
 
@@ -1179,9 +1373,14 @@ async function askJudge(prompt) {
 }
 
 async function generateReply() {
+  const aiName = state.aiName || 'Claude';
   const history = state.messages.slice(-20);
-  const convoText = history.map(m => `[${m.sender}]: ${m.text}`).join('\n');
-  const systemPrompt = `${state.systemPrompt}\n\nこれはグループチャットです。複数人が会話しています。各発言は [発言者名]: 内容 の形式で示されます。\nあなたは「Claude」として、会話の流れを読んで自然に一度だけ発言してください。[Claude]: のプレフィックスは付けず、発言内容のみを返してください。`;
+  const convoText = history.map(m => {
+    const displayName = m.sender === 'Claude' ? aiName : m.sender;
+    return `[${displayName}]: ${m.text}`;
+  }).join('\n');
+  const baseSystem = buildAiSystemPrompt(state.systemPrompt);
+  const systemPrompt = `${baseSystem}\n\nこれはグループチャットです。複数人が会話しています。各発言は [発言者名]: 内容 の形式で示されます。\nあなたは「${aiName}」として、会話の流れを読んで自然に一度だけ発言してください。[${aiName}]: のプレフィックスは付けず、発言内容のみを返してください。`;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1200,7 +1399,8 @@ async function generateReply() {
   const data = await res.json();
   if (!data.content?.[0]) return null;
   let reply = data.content[0].text.trim();
-  reply = reply.replace(/^\[?Claude\]?:\s*/i, '');
+  const aiNameForStrip = (state.aiName || 'Claude').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  reply = reply.replace(new RegExp(`^\\[?(${aiNameForStrip}|Claude)\\]?:\\s*`, 'i'), '');
   return reply;
 }
 
@@ -1209,7 +1409,7 @@ function showAiThinkingIndicator() {
   const el = document.createElement('div');
   el.id = 'aiThinking';
   el.className = 'ai-thinking';
-  el.textContent = '🤖 Claudeが考え中...';
+  el.textContent = '🤖 ' + (state.aiName || 'Claude') + 'が考え中...';
   document.getElementById('messages').appendChild(el);
   scrollBottom();
 }
@@ -1224,12 +1424,14 @@ function onTopicChange() {
   if (state.mode !== 'solo' && state.metaRef) {
     state.metaRef.update({ topic: newTopic }).catch(e => console.error(e));
   }
+  saveLastRoom();
 }
 
 function openSettings() {
   if (state.isHost) {
     document.getElementById('aiSettingsSection').style.display = '';
     document.getElementById('aiEnabledToggle').checked = state.aiEnabled;
+    document.getElementById('s_aiName').value = state.aiName || 'Claude';
     document.getElementById('s_systemPrompt').value = state.systemPrompt;
     document.getElementById('s_chattiness').value = state.chattiness;
     document.getElementById('s_cooldown').value = state.cooldown;
@@ -1292,11 +1494,13 @@ function updateAiEnabled() {
 
 async function saveSettings() {
   if (state.isHost) {
+    state.aiName = document.getElementById('s_aiName').value.trim() || 'Claude';
     state.systemPrompt = document.getElementById('s_systemPrompt').value.trim() || state.systemPrompt;
     state.chattiness = parseInt(document.getElementById('s_chattiness').value);
     state.cooldown = parseInt(document.getElementById('s_cooldown').value);
     if (state.metaRef) {
       await state.metaRef.update({
+        aiName: state.aiName,
         systemPrompt: state.systemPrompt,
         chattiness: state.chattiness,
         cooldown: state.cooldown,
@@ -1316,6 +1520,12 @@ async function saveSettings() {
     cfg.ghUser = state.ghUser;
     cfg.ghRepo = state.ghRepo;
     cfg.ghFolder = state.ghFolder;
+    cfg.aiName = state.aiName;
+    cfg.systemPrompt = state.systemPrompt;
+    cfg.chattiness = state.chattiness;
+    cfg.cooldown = state.cooldown;
+    cfg.judgeModel = state.judgeModel;
+    cfg.replyModel = state.replyModel;
     saveToStorage(key, cfg);
     if (state.ghToken && state.ghUser && state.ghRepo) {
       document.getElementById('saveBtn').style.display = '';
@@ -1326,7 +1536,21 @@ async function saveSettings() {
 }
 
 async function leaveRoom() {
-  if (!confirm('ルームを退出しますか？')) return;
+  const hasGh = state.isHost && state.ghToken && state.ghUser && state.ghRepo && state.messages && state.messages.length > 0;
+  const confirmMsg = hasGh
+    ? 'ルームを退出しますか？\n会話はGitHubに自動保存されます。'
+    : 'ルームを退出しますか？';
+  if (!confirm(confirmMsg)) return;
+
+  if (hasGh) {
+    try {
+      showToast('GitHubに保存中...', '');
+      await saveToGitHub();
+    } catch(e) {
+      console.warn('Auto-save failed', e);
+    }
+  }
+
   try {
     if (state.participantsRef && state.userName) {
       await state.participantsRef.child(state.userName).remove();
@@ -1339,9 +1563,11 @@ async function leaveRoom() {
   state.participants = {};
   state.roomId = null;
   state.mode = null;
+  clearLastRoom();
   document.getElementById('messages').innerHTML = '';
   closeModal('settingsModal');
   goto('home');
+  checkResumeButton();
   showToast('退出しました', 'success');
 }
 
@@ -1375,18 +1601,14 @@ async function copyText(text) {
 }
 
 function copyInviteMessage() {
-  const currentUrl = window.location.href.split('#')[0];
+  const baseUrl = window.location.href.split('?')[0].split('#')[0];
+  const inviteUrl = `${baseUrl}?room=${state.roomId}`;
   const msg = `🤖 Claude Loggerへの招待
 
-アプリURL:
-${currentUrl}
+下のリンクを開いて、お名前を入れるだけで参加できます👇
+${inviteUrl}
 
-ルームID: ${state.roomId}
-
-参加方法:
-1. 上のURLを開く
-2. 「ルームに参加」をタップ
-3. 自分の名前とルームID「${state.roomId}」を入力するだけ！`;
+（ルームID: ${state.roomId}）`;
   copyText(msg);
 }
 
@@ -1406,8 +1628,9 @@ async function saveToGitHub() {
   const filePath = `${state.ghFolder}/${fileName}`;
   const participantsList = state.mode !== 'solo' ? Object.keys(state.participants).join(', ') : state.userName;
   let md = `# ${topic}\n\n## メタ情報\n\n- **日時**: ${now.toLocaleString('ja-JP')}\n- **モード**: ${state.mode === 'solo' ? 'ソロ' : 'グループ'}\n- **参加者**: ${participantsList}\n- **メッセージ数**: ${state.messages.length}\n- **タグ**: #claude #ai-log #${safeTopic}\n\n---\n\n## 会話ログ\n\n`;
+  const aiDisplayName = state.aiName || 'Claude';
   for (const msg of state.messages) {
-    const name = msg.sender === 'Claude' ? '🤖 **Claude**' : `**${msg.sender}**`;
+    const name = msg.sender === 'Claude' ? `🤖 **${aiDisplayName}**` : `**${msg.sender}**`;
     md += `### ${name}\n\n${msg.text}\n\n`;
   }
   md += `---\n*Saved by Claude Logger*\n`;
@@ -1440,6 +1663,22 @@ function showToast(msg, type='') {
   setTimeout(() => t.className = 'toast', 3000);
 }
 
+function handleUrlParams() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl && /^\d{6}$/.test(roomFromUrl)) {
+      goto('joinSetup');
+      setTimeout(() => {
+        const input = document.getElementById('join_roomId');
+        if (input) input.value = roomFromUrl;
+      }, 100);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
 function initializeScreens() {
   document.querySelectorAll('.screen').forEach(s => {
     s.classList.remove('active');
@@ -1460,6 +1699,12 @@ if (document.readyState === 'loading') {
 
 window.addEventListener('load', () => {
   initializeScreens();
+  const handledByUrl = handleUrlParams();
+  checkResumeButton();
+  if (handledByUrl) {
+    const btn = document.getElementById('resumeBtn');
+    if (btn) btn.style.display = 'none';
+  }
 });
 
 window.addEventListener('beforeunload', () => {
