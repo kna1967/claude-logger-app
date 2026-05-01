@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Claude Logger 3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a26; --border: #2a2a3a;
+    --accent: #7c6af7; --accent2: #a78bfa; --accent-dim: rgba(124,106,247,0.15);
+    --text: #e8e8f0; --text-dim: #8888aa; --text-muted: #55556a;
+    --success: #4ade80; --error: #f87171; --warning: #fbbf24; --ai: #fbbf24;
+    --ai1: #fbbf24; --ai2: #60a5fa; --ai3: #f472b6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text);
+    height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .screen { display: none !important; flex-direction: column; height: 100dvh; }
+  .screen.active { display: flex !important; }
+  #home { overflow-y: auto; padding: 40px 20px; gap: 16px; justify-content: center; align-items: center; }
+  .home-logo {
+    width: 72px; height: 72px; background: linear-gradient(135deg, var(--accent), #c084fc);
+    border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px;
+    box-shadow: 0 8px 32px rgba(124,106,247,0.4); margin-bottom: 16px;
+  }
+  .home-title {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--text), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .home-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; text-align: center; }
+  .home-btn {
+    width: 100%; max-width: 340px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; cursor: pointer; display: flex; align-items: center; gap: 14px;
+    transition: all 0.2s; text-align: left; color: var(--text); font-family: inherit;
+  }
+  .home-btn:active { transform: scale(0.98); background: var(--surface2); }
+  .home-btn.primary { border-color: var(--accent); background: var(--accent-dim); }
+  .home-btn-icon {
+    width: 44px; height: 44px; background: var(--surface2);
+    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .home-btn-text { flex: 1; }
+  .home-btn-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  .home-btn-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+  .setup-wrap { overflow-y: auto; padding: 24px 20px 40px; }
+  .setup-header { text-align: center; padding: 20px 0 10px; }
+  .setup-header h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--text), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .setup-header p { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+  .setup-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px;
+    margin-bottom: 16px;
+  }
+  .setup-card h2 { font-size: 13px; font-weight: 500; color: var(--accent2); letter-spacing: 0.5px; text-transform: uppercase; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--text-dim); }
+  .field input, .field textarea {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; font-size: 14px; color: var(--text);
+    font-family: 'JetBrains Mono', monospace; outline: none; width: 100%; transition: border-color 0.2s;
+  }
+  .field textarea {
+    font-family: 'Noto Sans JP', sans-serif; line-height: 1.5; min-height: 80px; resize: vertical;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field input::placeholder, .field textarea::placeholder { color: var(--text-muted); font-family: 'Noto Sans JP', sans-serif; }
+  .primary-btn {
+    background: linear-gradient(135deg, var(--accent), #a855f7); color: white; border: none;
+    border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700;
+    font-family: 'Noto Sans JP', sans-serif; cursor: pointer; width: 100%;
+    box-shadow: 0 4px 24px rgba(124,106,247,0.4);
+    transition: opacity 0.2s, transform 0.1s; margin-bottom: 12px;
+  }
+  .primary-btn:active { opacity: 0.85; transform: scale(0.98); }
+  .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .secondary-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 14px; padding: 14px; font-size: 14px; font-weight: 500;
+    font-family: 'Noto Sans JP', sans-serif; cursor: pointer; width: 100%;
+  }
+  .back-btn {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 14px; padding: 8px; cursor: pointer; align-self: flex-start;
+    font-family: 'Noto Sans JP', sans-serif; margin-bottom: 8px;
+  }
+  .chat-header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 10px;
+  }
+  .chat-header-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .header-logo {
+    width: 32px; height: 32px; background: linear-gradient(135deg, var(--accent), #c084fc);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .header-info { min-width: 0; flex: 1; }
+  .header-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-sub { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-btns { display: flex; gap: 8px; flex-shrink: 0; }
+  .icon-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 9px; padding: 7px 10px; font-size: 14px; cursor: pointer;
+  }
+  .ai-status {
+    font-size: 10px; padding: 2px 6px; border-radius: 6px;
+    background: rgba(251,191,36,0.1); color: var(--ai);
+    border: 1px solid rgba(251,191,36,0.3);
+  }
+  .ai-status.off { background: rgba(136,136,170,0.1); color: var(--text-dim); border-color: var(--border); }
+  .room-info-bar {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 8px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .room-id-chip {
+    background: var(--accent-dim); color: var(--accent2);
+    padding: 3px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+  }
+  .invite-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 4px 10px; border-radius: 8px; font-size: 11px; cursor: pointer;
+    margin-left: auto; font-family: 'Noto Sans JP', sans-serif;
+  }
+  .topic-bar {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 8px 16px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .topic-bar label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  #topicInput {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-size: 13px; color: var(--text-dim); font-family: 'Noto Sans JP', sans-serif;
+  }
+  #topicInput::placeholder { color: var(--text-muted); }
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch;
+  }
+  .message { display: flex; flex-direction: column; gap: 4px; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .message.me { align-items: flex-end; }
+  .message.other { align-items: flex-start; }
+  .message.ai { align-items: flex-start; }
+  .msg-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; padding: 0 4px; display: flex; gap: 6px; align-items: center; }
+  .msg-label .name { font-weight: 600; }
+  .msg-bubble {
+    max-width: 85%; padding: 12px 15px; border-radius: 16px;
+    font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+  }
+  .message.me .msg-bubble {
+    background: linear-gradient(135deg, #2d1f6e, #3d2a8a);
+    border: 1px solid rgba(124,106,247,0.3); border-bottom-right-radius: 4px; color: #d4ccff;
+  }
+  .message.other .msg-bubble {
+    background: var(--surface); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px; color: var(--text);
+  }
+  .message.ai .msg-bubble {
+    background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.3);
+    border-bottom-left-radius: 4px; color: var(--text);
+  }
+  .message.ai[data-aiid="ai1"] .msg-bubble {
+    background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.3);
+  }
+  .message.ai[data-aiid="ai2"] .msg-bubble {
+    background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.35);
+  }
+  .message.ai[data-aiid="ai3"] .msg-bubble {
+    background: rgba(244,114,182,0.08); border-color: rgba(244,114,182,0.35);
+  }
+  .message.ai[data-aiid="ai1"] .msg-label .name { color: var(--ai1); }
+  .message.ai[data-aiid="ai2"] .msg-label .name { color: var(--ai2); }
+  .message.ai[data-aiid="ai3"] .msg-label .name { color: var(--ai3); }
+  .typing { display: flex; gap: 4px; padding: 14px 16px; }
+  .typing span { width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+  .ai-thinking { padding: 6px 12px; font-size: 11px; color: var(--ai); text-align: center; opacity: 0.7; }
+  .input-area {
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0;
+  }
+  #userInput {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 11px 14px; font-size: 15px; color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif; outline: none; resize: none;
+    max-height: 120px; line-height: 1.5; transition: border-color 0.2s;
+  }
+  #userInput:focus { border-color: var(--accent); }
+  #userInput::placeholder { color: var(--text-muted); }
+  .send-btn {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    border: none; border-radius: 12px; color: white; font-size: 18px;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 12px rgba(124,106,247,0.4); transition: opacity 0.2s, transform 0.1s;
+  }
+  .send-btn:active { opacity: 0.8; transform: scale(0.95); }
+  .send-btn:disabled { opacity: 0.4; }
+  .toast {
+    position: fixed; bottom: 100px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 18px; font-size: 13px;
+    opacity: 0; transition: all 0.3s; z-index: 1000; white-space: nowrap; pointer-events: none;
+    max-width: 90%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: rgba(74,222,128,0.3); color: var(--success); }
+  .toast.error { border-color: rgba(248,113,113,0.3); color: var(--error); }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 200; align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0; padding: 24px 20px 40px;
+    width: 100%; max-height: 85dvh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px; animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 8px; width: 32px; height: 32px; font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .danger-btn {
+    background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2);
+    color: var(--error); border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 500;
+    font-family: 'Noto Sans JP', sans-serif; cursor: pointer; width: 100%;
+  }
+  .room-id-big {
+    text-align: center; padding: 20px; background: var(--accent-dim);
+    border: 1px solid rgba(124,106,247,0.3); border-radius: 14px;
+  }
+  .room-id-big-value {
+    font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700;
+    color: var(--accent2); letter-spacing: 3px;
+  }
+  .room-id-big-label { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+  .segment {
+    display: flex; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; gap: 3px;
+  }
+  .segment button {
+    flex: 1; background: transparent; border: none; color: var(--text-dim);
+    padding: 8px; font-size: 12px; cursor: pointer; border-radius: 7px;
+    font-family: 'Noto Sans JP', sans-serif; transition: all 0.15s;
+  }
+  .segment button.active { background: var(--accent); color: white; font-weight: 600; }
+  .slider-field { display: flex; flex-direction: column; gap: 8px; }
+  .slider-header { display: flex; justify-content: space-between; font-size: 12px; }
+  .slider-header .label { color: var(--text-dim); }
+  .slider-header .value { color: var(--accent2); font-weight: 600; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .toggle-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; gap: 12px;
+  }
+  .toggle-row .label { font-size: 13px; }
+  .toggle-row .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; inset: 0; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: 0.2s;
+  }
+  .switch .slider:before {
+    content: ""; position: absolute; left: 2px; top: 2px;
+    width: 18px; height: 18px; background: var(--text-dim);
+    border-radius: 50%; transition: 0.2s;
+  }
+  .switch input:checked + .slider { background: var(--accent-dim); border-color: var(--accent); }
+  .switch input:checked + .slider:before { left: 22px; background: var(--accent); }
+</style>
+</head>
+<body>
+
+<div id="home" class="screen active">
+  <div class="home-logo">🎭</div>
+  <div class="home-title">Claude Logger 3</div>
+  <div class="home-sub">3人のAIと会話、記録、共有</div>
+
+  <button class="home-btn" id="resumeBtn" onclick="resumeLastRoom()" style="display:none; border-color: var(--success); background: rgba(74,222,128,0.05);">
+    <div class="home-btn-icon" style="background: rgba(74,222,128,0.15);">🔄</div>
+    <div class="home-btn-text">
+      <div class="home-btn-title">前回のルームに戻る</div>
+      <div class="home-btn-desc" id="resumeBtnDesc">復帰します</div>
+    </div>
+  </button>
+
+  <button class="home-btn primary" onclick="goto('soloSetup')">
+    <div class="home-btn-icon">💬</div>
+    <div class="home-btn-text">
+      <div class="home-btn-title">ソロで話す</div>
+      <div class="home-btn-desc">自分とClaudeの1対1チャット</div>
+    </div>
+  </button>
+
+  <button class="home-btn" onclick="goto('hostSetup')">
+    <div class="home-btn-icon">😊</div>
+    <div class="home-btn-text">
+      <div class="home-btn-title">ルームを作る</div>
+      <div class="home-btn-desc">複数人でClaudeと会話（ホスト）</div>
+    </div>
+  </button>
+
+  <button class="home-btn" onclick="goto('joinSetup')">
+    <div class="home-btn-icon">🚪</div>
+    <div class="home-btn-text">
+      <div class="home-btn-title">ルームに参加</div>
+      <div class="home-btn-desc">ルームIDを入れるだけ</div>
+    </div>
+  </button>
+</div>
+
+<div id="soloSetup" class="screen setup-wrap">
+  <button class="back-btn" onclick="goto('home')">← 戻る</button>
+  <div class="setup-header">
+    <h1>💬 ソロチャット</h1>
+    <p>自分とClaudeだけの会話</p>
+  </div>
+
+  <div id="soloSavedBadge" style="display:none; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); border-radius: 12px; padding: 12px 16px; font-size: 12px; color: var(--success); margin-bottom: 16px;">
+    ✅ 設定が保存されています
+  </div>
+
+  <div class="setup-card">
+    <h2>🔑 Anthropic API</h2>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="solo_apiKey" placeholder="sk-ant-..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <h2>🐙 GitHub 設定（任意）</h2>
+    <div class="field">
+      <label>GitHub Token</label>
+      <input type="password" id="solo_ghToken" placeholder="ghp_... (空欄でOK)" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>ユーザー名</label>
+      <input type="text" id="solo_ghUser" placeholder="your-username" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>リポジトリ名</label>
+      <input type="text" id="solo_ghRepo" placeholder="my-logs" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>保存フォルダ</label>
+      <input type="text" id="solo_ghFolder" placeholder="claude-logs" autocomplete="off">
+    </div>
+  </div>
+
+  <button class="primary-btn" onclick="startSolo()">チャットを開始する →</button>
+</div>
+
+<div id="hostSetup" class="screen setup-wrap">
+  <button class="back-btn" onclick="goto('home')">← 戻る</button>
+  <div class="setup-header">
+    <h1>😊 ルームを作る</h1>
+    <p>あなたがホストになります</p>
+  </div>
+
+  <div id="hostSavedBadge" style="display:none; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); border-radius: 12px; padding: 12px 16px; font-size: 12px; color: var(--success); margin-bottom: 16px;">
+    ✅ 設定が保存されています
+  </div>
+
+  <div class="setup-card">
+    <h2>👤 あなたの表示名</h2>
+    <div class="field">
+      <input type="text" id="host_name" placeholder="田中" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <h2>🔑 Anthropic API</h2>
+    <div class="field">
+      <label>API Key（あなたが全員分支払います）</label>
+      <input type="password" id="host_apiKey" placeholder="sk-ant-..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <h2>🐙 GitHub 設定(任意)</h2>
+    <div class="field">
+      <label>GitHub Token</label>
+      <input type="password" id="host_ghToken" placeholder="ghp_..." autocomplete="off">
+    </div>
+    <div class="field">
+      <label>ユーザー名</label>
+      <input type="text" id="host_ghUser" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>リポジトリ名</label>
+      <input type="text" id="host_ghRepo" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>保存フォルダ</label>
+      <input type="text" id="host_ghFolder" placeholder="claude-logs" autocomplete="off">
+    </div>
+  </div>
+
+  <button class="primary-btn" onclick="createRoom()">ルームを作成する →</button>
+</div>
+
+<div id="joinSetup" class="screen setup-wrap">
+  <button class="back-btn" onclick="goto('home')">← 戻る</button>
+  <div class="setup-header">
+    <h1>🚪 ルームに参加</h1>
+    <p>ホストから送られたルームIDを入力</p>
+  </div>
+
+  <div class="setup-card">
+    <h2>👤 あなたの表示名</h2>
+    <div class="field">
+      <input type="text" id="join_name" placeholder="佐藤" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="setup-card">
+    <h2>🔑 ルームID</h2>
+    <div class="field">
+      <input type="text" id="join_roomId" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="847203" style="font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; font-size: 18px;" autocomplete="off">
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+        💡 ホストから送られた6桁の数字IDを入力してください
+      </div>
+    </div>
+  </div>
+
+  <button class="primary-btn" onclick="joinRoom()">ルームに参加する →</button>
+</div>
+
+<div id="chat" class="screen">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="header-logo">🤖</div>
+      <div class="header-info">
+        <div class="header-title" id="headerTitle">Claude Logger</div>
+        <div class="header-sub" id="headerSub">0 メッセージ</div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <span class="ai-status" id="aiStatus">AI ON</span>
+      <button class="icon-btn" onclick="openSettings()">⚙️</button>
+      <button class="icon-btn" id="saveBtn" onclick="saveToGitHub()" style="display:none;">💾</button>
+    </div>
+  </div>
+
+  <div class="room-info-bar" id="roomInfoBar" style="display:none;">
+    <span>🏠 ルーム:</span>
+    <span class="room-id-chip" id="roomIdChip"></span>
+    <span id="participantsLabel">1人</span>
+    <button class="invite-btn" onclick="openInvite()">📤 招待</button>
+  </div>
+
+  <div class="topic-bar">
+    <label>テーマ：</label>
+    <input type="text" id="topicInput" placeholder="今日のトピック（任意）" onchange="onTopicChange()">
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="input-area">
+    <textarea id="userInput" rows="1" placeholder="メッセージを入力..."
+      oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal" onclick="closeSettingsOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙️ 設定</h2>
+      <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
+    </div>
+
+    <div id="aiSettingsSection" style="display:none;">
+      <div class="setup-card">
+        <h2>🎭 共通設定</h2>
+
+        <div class="toggle-row">
+          <div>
+            <div class="label">AI 全体 ON/OFF</div>
+            <div class="desc">全AIを一時的にミュート</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="aiEnabledToggle" onchange="updateAiEnabled()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div>
+          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:6px;">判定モデル(誰が話すか判定)</label>
+          <div class="segment" data-segment="judge">
+            <button type="button" data-model="haiku" onclick="selectModel('judge', 'haiku')">Haiku(速・安)</button>
+            <button type="button" data-model="sonnet" onclick="selectModel('judge', 'sonnet')">Sonnet</button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px; color:var(--text-dim); display:block; margin-bottom:6px;">本返答モデル</label>
+          <div class="segment" data-segment="reply">
+            <button type="button" data-model="haiku" onclick="selectModel('reply', 'haiku')">Haiku(速・安)</button>
+            <button type="button" data-model="sonnet" onclick="selectModel('reply', 'sonnet')">Sonnet(高品質)</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="charactersContainer"></div>
+    </div>
+
+    <div id="ghSettingsSection">
+      <div class="setup-card">
+        <h2>🐙 GitHub 設定</h2>
+        <div class="field">
+          <label>GitHub Token</label>
+          <input type="password" id="s_ghToken" placeholder="ghp_..." autocomplete="off">
+        </div>
+        <div class="field">
+          <label>ユーザー名</label>
+          <input type="text" id="s_ghUser" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>リポジトリ名</label>
+          <input type="text" id="s_ghRepo" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>保存フォルダ</label>
+          <input type="text" id="s_ghFolder" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <button class="primary-btn" onclick="saveSettings()">💾 設定を保存</button>
+    <button class="danger-btn" onclick="leaveRoom()">🚪 ルームを退出</button>
+    <button class="danger-btn" onclick="clearSettings()">🗑️ 全設定をリセット</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="inviteModal" onclick="closeSettingsOutside(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📤 招待</h2>
+      <button class="modal-close" onclick="closeModal('inviteModal')">✕</button>
+    </div>
+
+    <div class="room-id-big">
+      <div class="room-id-big-value" id="inviteRoomId"></div>
+      <div class="room-id-big-label">このルームIDを共有するだけでOK</div>
+    </div>
+
+    <div class="field">
+      <button class="secondary-btn" onclick="copyText(state.roomId)">📋 ルームIDだけコピー</button>
+    </div>
+
+    <div class="field">
+      <button class="primary-btn" onclick="copyInviteMessage()">📱 招待メッセージをコピー</button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-muted); padding: 8px; line-height: 1.7;">
+      💡 招待メッセージにはルームID付きの招待リンクが入っています。LINEやiMessageで送ってください。<br>
+      <br>
+      受け取った人は、リンクを開いて表示名を入れるだけで参加できます（ルームIDは自動入力）。
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script>
+// ========================================
+// ★★★ Firebase 設定（埋め込み） ★★★
+// このアプリを使う全員が、この Firebase プロジェクトを共有します
+// ========================================
+// ⚠️ Claude Logger 3 用の新Firebaseプロジェクトの Config をここに貼り付けてください
+// （旧版とは別プロジェクトを使うこと）
+const FIREBASE_CONFIG = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME.firebaseapp.com",
+  databaseURL: "https://REPLACE_ME-default-rtdb.firebaseio.com",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME.firebasestorage.app",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+
+// ========================================
+// グローバル状態
+// ========================================
+const DEFAULT_CHARACTERS = [
+  {
+    id: 'ai1',
+    name: 'Claude',
+    emoji: '🤖',
+    enabled: true,
+    chattiness: 1,
+    cooldown: 5,
+    systemPrompt: 'あなたはバランス型の進行役AI「Claude」です。落ち着いた敬語で、会話の流れを整理しながら全員に話を振ってください。短く、1〜2文でテンポよく発言します。'
+  },
+  {
+    id: 'ai2',
+    name: 'ルナ',
+    emoji: '🌙',
+    enabled: true,
+    chattiness: 0,
+    cooldown: 8,
+    systemPrompt: 'あなたはおっとり聞き役のAI「ルナ」です。優しい口調で、相手の感情に寄り添う共感的な発言を中心にしてください。短く控えめに、1〜2文で発言します。絵文字を時々使います ✨'
+  },
+  {
+    id: 'ai3',
+    name: 'カイ',
+    emoji: '⭐',
+    enabled: true,
+    chattiness: 2,
+    cooldown: 5,
+    systemPrompt: 'あなたは元気で話題提供型のAI「カイ」です。明るくフレンドリーな口調で、新しい話題やリアクションを積極的に出してください。短く、1〜2文でテンポよく。絵文字を適度に使います 🎉'
+  }
+];
+
+const state = {
+  mode: null,
+  apiKey: null,
+  userName: null,
+  roomId: null,
+  isHost: false,
+  firebaseApp: null,
+  db: null,
+  messagesRef: null,
+  participantsRef: null,
+  metaRef: null,
+  messages: [],
+  participants: {},
+  topic: '',
+  isLoading: false,
+  isAiThinking: false,
+  aiInterruptTimer: null,
+
+  aiCharacters: JSON.parse(JSON.stringify(DEFAULT_CHARACTERS)),
+  aiLastTimestamps: { ai1: 0, ai2: 0, ai3: 0 },
+  aiEnabled: true,
+  judgeModel: 'haiku',
+  replyModel: 'sonnet',
+
+  ghToken: null,
+  ghUser: null,
+  ghRepo: null,
+  ghFolder: 'claude-logs',
+};
+
+const CHATTINESS_LABELS = { 0: '控えめ', 1: '普通', 2: 'おしゃべり' };
+
+const MODEL_IDS = {
+  haiku: 'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6'
+};
+
+function checkFirebaseConfigured() {
+  if (FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+    showToast('⚠️ Firebase Config 未設定。コードを編集してください', 'error');
+    return false;
+  }
+  return true;
+}
+
+function goto(screenId) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = 'none';
+  });
+  const target = document.getElementById(screenId);
+  if (target) {
+    target.classList.add('active');
+    target.style.display = 'flex';
+  }
+  if (screenId === 'soloSetup') loadSoloSettings();
+  if (screenId === 'hostSetup') loadHostSettings();
+  if (screenId === 'joinSetup') loadJoinSettings();
+}
+
+function saveToStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
+}
+
+function loadFromStorage(key) {
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; }
+  catch(e) { return null; }
+}
+
+function saveLastRoom() {
+  if (!state.mode) return;
+  const data = {
+    mode: state.mode,
+    roomId: state.roomId,
+    userName: state.userName,
+    isHost: state.isHost,
+    topic: state.topic,
+    savedAt: new Date().toISOString()
+  };
+  try { localStorage.setItem('cl_lastRoom', JSON.stringify(data)); }
+  catch(e) { console.warn('lastRoom save failed', e); }
+}
+
+function loadLastRoom() {
+  try {
+    const r = localStorage.getItem('cl_lastRoom');
+    return r ? JSON.parse(r) : null;
+  } catch(e) { return null; }
+}
+
+function clearLastRoom() {
+  try { localStorage.removeItem('cl_lastRoom'); } catch(e) {}
+}
+
+function checkResumeButton() {
+  const last = loadLastRoom();
+  const btn = document.getElementById('resumeBtn');
+  const desc = document.getElementById('resumeBtnDesc');
+  if (!btn) return;
+  if (last) {
+    let label = '';
+    if (last.mode === 'solo') label = `ソロチャット${last.userName ? ' · ' + last.userName : ''}`;
+    else if (last.mode === 'host') label = `ホスト · ルーム ${last.roomId}`;
+    else if (last.mode === 'guest') label = `参加中 · ルーム ${last.roomId}`;
+    if (desc) desc.textContent = label;
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function resumeLastRoom() {
+  const last = loadLastRoom();
+  if (!last) {
+    showToast('前回のルーム情報が見つかりません', 'error');
+    return;
+  }
+
+  if (last.mode === 'solo') {
+    const cfg = loadFromStorage('cl_solo');
+    if (!cfg || !cfg.apiKey) {
+      showToast('設定が見つかりません。最初から始めてください', 'error');
+      clearLastRoom();
+      checkResumeButton();
+      return;
+    }
+    state.mode = 'solo';
+    state.apiKey = cfg.apiKey;
+    state.userName = last.userName || 'あなた';
+    state.ghToken = cfg.ghToken;
+    state.ghUser = cfg.ghUser;
+    state.ghRepo = cfg.ghRepo;
+    state.ghFolder = cfg.ghFolder || 'claude-logs';
+    if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
+    if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
+    if (cfg.replyModel) state.replyModel = cfg.replyModel;
+    state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
+    state.messages = [];
+    state.isHost = true;
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    enterChatScreen();
+    showToast('ソロチャットに復帰しました', 'success');
+    return;
+  }
+
+  if (last.mode === 'host') {
+    const cfg = loadFromStorage('cl_host');
+    if (!cfg || !cfg.apiKey) {
+      showToast('設定が見つかりません。最初から始めてください', 'error');
+      clearLastRoom();
+      checkResumeButton();
+      return;
+    }
+    state.mode = 'host';
+    state.apiKey = cfg.apiKey;
+    state.userName = last.userName || cfg.userName;
+    state.roomId = last.roomId;
+    state.isHost = true;
+    state.ghToken = cfg.ghToken;
+    state.ghUser = cfg.ghUser;
+    state.ghRepo = cfg.ghRepo;
+    state.ghFolder = cfg.ghFolder || 'claude-logs';
+    if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
+    if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
+    if (cfg.replyModel) state.replyModel = cfg.replyModel;
+    state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
+    state.messages = [];
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    try {
+      initFirebase();
+      const metaSnap = await state.metaRef.once('value');
+      if (!metaSnap.exists()) {
+        showToast('ルームが見つかりません。新規作成してください', 'error');
+        clearLastRoom();
+        checkResumeButton();
+        return;
+      }
+      await state.participantsRef.child(state.userName).set({ joinedAt: Date.now(), isHost: true });
+      state.participantsRef.child(state.userName).onDisconnect().remove();
+      subscribeToRoom();
+      enterChatScreen();
+      showToast('ホストとして復帰しました', 'success');
+    } catch(e) {
+      console.error(e);
+      showToast('復帰エラー: ' + e.message, 'error');
+    }
+    return;
+  }
+
+  if (last.mode === 'guest') {
+    state.mode = 'guest';
+    state.userName = last.userName;
+    state.roomId = last.roomId;
+    state.isHost = false;
+    state.apiKey = null;
+    state.messages = [];
+    state.aiEnabled = true;
+    state.topic = last.topic || '';
+    try {
+      initFirebase();
+      const metaSnap = await state.metaRef.once('value');
+      if (!metaSnap.exists()) {
+        showToast('ルームが見つかりません', 'error');
+        clearLastRoom();
+        checkResumeButton();
+        return;
+      }
+      await state.participantsRef.child(state.userName).set({ joinedAt: Date.now(), isHost: false });
+      state.participantsRef.child(state.userName).onDisconnect().remove();
+      subscribeToRoom();
+      enterChatScreen();
+      showToast('ルームに復帰しました', 'success');
+    } catch(e) {
+      console.error(e);
+      showToast('復帰エラー: ' + e.message, 'error');
+    }
+  }
+}
+
+function loadSoloSettings() {
+  const s = loadFromStorage('cl_solo');
+  if (!s) return;
+  document.getElementById('solo_apiKey').value = s.apiKey ? '（保存済み）' : '';
+  document.getElementById('solo_ghToken').value = s.ghToken ? '（保存済み）' : '';
+  document.getElementById('solo_ghUser').value = s.ghUser || '';
+  document.getElementById('solo_ghRepo').value = s.ghRepo || '';
+  document.getElementById('solo_ghFolder').value = s.ghFolder || '';
+  if (s.apiKey) document.getElementById('soloSavedBadge').style.display = 'block';
+}
+
+function loadHostSettings() {
+  const s = loadFromStorage('cl_host');
+  if (!s) return;
+  document.getElementById('host_name').value = s.userName || '';
+  document.getElementById('host_apiKey').value = s.apiKey ? '（保存済み）' : '';
+  document.getElementById('host_ghToken').value = s.ghToken ? '（保存済み）' : '';
+  document.getElementById('host_ghUser').value = s.ghUser || '';
+  document.getElementById('host_ghRepo').value = s.ghRepo || '';
+  document.getElementById('host_ghFolder').value = s.ghFolder || '';
+  if (s.apiKey) document.getElementById('hostSavedBadge').style.display = 'block';
+}
+
+function loadJoinSettings() {
+  const s = loadFromStorage('cl_join');
+  if (!s) return;
+  document.getElementById('join_name').value = s.userName || '';
+}
+
+function startSolo() {
+  const apiKey = document.getElementById('solo_apiKey').value.trim();
+  const saved = loadFromStorage('cl_solo') || {};
+  const useApiKey = apiKey === '（保存済み）' ? saved.apiKey : apiKey;
+  if (!useApiKey) { showToast('API Keyを入力してください', 'error'); return; }
+  const ghToken = document.getElementById('solo_ghToken').value.trim();
+  const useGhToken = ghToken === '（保存済み）' ? saved.ghToken : ghToken;
+  const cfg = {
+    apiKey: useApiKey,
+    ghToken: useGhToken || null,
+    ghUser: document.getElementById('solo_ghUser').value.trim() || null,
+    ghRepo: document.getElementById('solo_ghRepo').value.trim() || null,
+    ghFolder: document.getElementById('solo_ghFolder').value.trim() || 'claude-logs',
+  };
+  saveToStorage('cl_solo', cfg);
+  state.mode = 'solo';
+  state.apiKey = cfg.apiKey;
+  state.userName = 'あなた';
+  state.ghToken = cfg.ghToken;
+  state.ghUser = cfg.ghUser;
+  state.ghRepo = cfg.ghRepo;
+  state.ghFolder = cfg.ghFolder;
+  if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
+  if (saved.judgeModel) state.judgeModel = saved.judgeModel;
+  if (saved.replyModel) state.replyModel = saved.replyModel;
+  state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
+  state.messages = [];
+  state.isHost = true;
+  state.aiEnabled = true;
+  enterChatScreen();
+}
+
+async function createRoom() {
+  const name = document.getElementById('host_name').value.trim();
+  const apiKey = document.getElementById('host_apiKey').value.trim();
+  const saved = loadFromStorage('cl_host') || {};
+  if (!name) { showToast('表示名を入力してください', 'error'); return; }
+  const useApiKey = apiKey === '（保存済み）' ? saved.apiKey : apiKey;
+  if (!useApiKey) { showToast('Anthropic API Keyを入力してください', 'error'); return; }
+  const ghToken = document.getElementById('host_ghToken').value.trim();
+  const useGhToken = ghToken === '（保存済み）' ? saved.ghToken : ghToken;
+  const roomId = generateRoomId();
+  const cfg = {
+    userName: name,
+    apiKey: useApiKey,
+    ghToken: useGhToken || null,
+    ghUser: document.getElementById('host_ghUser').value.trim() || null,
+    ghRepo: document.getElementById('host_ghRepo').value.trim() || null,
+    ghFolder: document.getElementById('host_ghFolder').value.trim() || 'claude-logs',
+  };
+  saveToStorage('cl_host', cfg);
+  state.mode = 'host';
+  state.apiKey = useApiKey;
+  state.userName = name;
+  state.roomId = roomId;
+  state.isHost = true;
+  state.ghToken = cfg.ghToken;
+  state.ghUser = cfg.ghUser;
+  state.ghRepo = cfg.ghRepo;
+  state.ghFolder = cfg.ghFolder;
+  if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
+  if (saved.judgeModel) state.judgeModel = saved.judgeModel;
+  if (saved.replyModel) state.replyModel = saved.replyModel;
+  state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
+  state.messages = [];
+  state.aiEnabled = true;
+  if (!checkFirebaseConfigured()) return;
+  try {
+    initFirebase();
+    await state.metaRef.set({
+      hostName: name,
+      createdAt: Date.now(),
+      topic: '',
+      aiEnabled: true,
+      aiCharacters: state.aiCharacters,
+      judgeModel: state.judgeModel,
+      replyModel: state.replyModel,
+    });
+    await state.participantsRef.child(name).set({ joinedAt: Date.now(), isHost: true });
+    state.participantsRef.child(name).onDisconnect().remove();
+    subscribeToRoom();
+    enterChatScreen();
+    showToast('✅ ルームを作成しました', 'success');
+    setTimeout(() => openInvite(), 500);
+  } catch(e) {
+    console.error(e);
+    showToast('Firebase接続エラー: ' + e.message, 'error');
+  }
+}
+
+async function joinRoom() {
+  const name = document.getElementById('join_name').value.trim();
+  const roomId = document.getElementById('join_roomId').value.trim();
+  if (!name) { showToast('表示名を入力してください', 'error'); return; }
+  if (!roomId) { showToast('ルームIDを入力してください', 'error'); return; }
+  if (!/^\d{6}$/.test(roomId)) { showToast('ルームIDは6桁の数字です', 'error'); return; }
+  saveToStorage('cl_join', { userName: name });
+  state.mode = 'guest';
+  state.userName = name;
+  state.roomId = roomId;
+  state.isHost = false;
+  state.apiKey = null;
+  state.messages = [];
+  state.aiEnabled = true;
+  if (!checkFirebaseConfigured()) return;
+  try {
+    initFirebase();
+    const metaSnap = await state.metaRef.once('value');
+    if (!metaSnap.exists()) {
+      showToast('ルームが見つかりません。IDを確認してください', 'error');
+      return;
+    }
+    await state.participantsRef.child(name).set({ joinedAt: Date.now(), isHost: false });
+    state.participantsRef.child(name).onDisconnect().remove();
+    subscribeToRoom();
+    enterChatScreen();
+    showToast('✅ ルームに参加しました', 'success');
+  } catch(e) {
+    console.error(e);
+    showToast('接続エラー: ' + e.message, 'error');
+  }
+}
+
+function generateRoomId() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function initFirebase() {
+  if (state.firebaseApp) { try { state.firebaseApp.delete(); } catch(e) {} }
+  state.firebaseApp = firebase.initializeApp(FIREBASE_CONFIG, 'cl_' + Date.now());
+  state.db = firebase.database(state.firebaseApp);
+  const roomPath = `rooms/${state.roomId}`;
+  state.messagesRef = state.db.ref(`${roomPath}/messages`);
+  state.participantsRef = state.db.ref(`${roomPath}/participants`);
+  state.metaRef = state.db.ref(`${roomPath}/meta`);
+}
+
+function subscribeToRoom() {
+  state.messagesRef.on('child_added', (snap) => {
+    const msg = snap.val();
+    msg._key = snap.key;
+    if (state.messages.find(m => m._key === msg._key)) return;
+    state.messages.push(msg);
+    renderMessage(msg);
+    updateCount();
+    if (state.isHost && state.aiEnabled && msg.role !== 'assistant') {
+      scheduleAiInterrupt();
+    }
+  });
+  state.participantsRef.on('value', (snap) => {
+    state.participants = snap.val() || {};
+    updateParticipantsDisplay();
+  });
+  state.metaRef.on('value', (snap) => {
+    const meta = snap.val();
+    if (!meta) return;
+    if (meta.topic !== undefined && meta.topic !== state.topic) {
+      state.topic = meta.topic;
+      const topicInput = document.getElementById('topicInput');
+      if (document.activeElement !== topicInput) {
+        topicInput.value = meta.topic;
+      }
+    }
+    if (Array.isArray(meta.aiCharacters) && meta.aiCharacters.length > 0) {
+      state.aiCharacters = meta.aiCharacters.map(c => ({ ...c }));
+    }
+    if (!state.isHost) {
+      state.aiEnabled = meta.aiEnabled !== false;
+      state.judgeModel = meta.judgeModel || state.judgeModel;
+      state.replyModel = meta.replyModel || state.replyModel;
+      updateAiStatusDisplay();
+    }
+  });
+}
+
+function enterChatScreen() {
+  goto('chat');
+  if (state.mode === 'solo') {
+    document.getElementById('headerTitle').textContent = 'ソロチャット';
+    document.getElementById('roomInfoBar').style.display = 'none';
+  } else {
+    document.getElementById('headerTitle').textContent = state.isHost ? '😊 ホスト' : '🚪 ゲスト';
+    document.getElementById('roomInfoBar').style.display = 'flex';
+    document.getElementById('roomIdChip').textContent = state.roomId;
+  }
+  if (state.isHost && state.ghToken && state.ghUser && state.ghRepo) {
+    document.getElementById('saveBtn').style.display = '';
+  } else {
+    document.getElementById('saveBtn').style.display = 'none';
+  }
+  updateAiStatusDisplay();
+  updateCount();
+  if (state.messages.length === 0 && state.mode === 'solo') {
+    const enabled = state.aiCharacters.filter(c => c.enabled);
+    const intro = enabled.length > 0
+      ? `こんにちは！${enabled.map(c => `${c.emoji} ${c.name}`).join(' / ')} がお相手します。何でも話しかけてください。`
+      : 'こんにちは！設定からAIキャラを有効化してください。';
+    const welcomeMsg = {
+      sender: enabled[0]?.name || 'AI',
+      role: 'assistant',
+      aiId: enabled[0]?.id || 'ai1',
+      aiEmoji: enabled[0]?.emoji || '🎭',
+      text: intro,
+      timestamp: Date.now(), _key: 'welcome_' + Date.now()
+    };
+    state.messages.push(welcomeMsg);
+    renderMessage(welcomeMsg);
+    updateCount();
+  }
+  saveLastRoom();
+}
+
+function renderMessage(msg) {
+  const div = document.createElement('div');
+  let klass = 'message ';
+  let label = '';
+  let aiId = '';
+  if (msg.role === 'assistant') {
+    klass += 'ai';
+    aiId = msg.aiId || 'ai1';
+    const emoji = msg.aiEmoji || '🤖';
+    label = `${emoji} ${msg.sender || 'AI'}`;
+  } else if (msg.sender === state.userName || state.mode === 'solo') {
+    klass += 'me'; label = msg.sender;
+  } else {
+    klass += 'other'; label = msg.sender;
+  }
+  div.className = klass;
+  if (aiId) div.dataset.aiid = aiId;
+  div.dataset.key = msg._key || '';
+  div.innerHTML = `<div class="msg-label"><span class="name">${escapeHtml(label)}</span></div><div class="msg-bubble">${escapeHtml(msg.text)}</div>`;
+  document.getElementById('messages').appendChild(div);
+  scrollBottom();
+}
+
+function escapeHtml(t) {
+  if (!t) return '';
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function scrollBottom() {
+  const el = document.getElementById('messages');
+  setTimeout(() => el.scrollTop = el.scrollHeight, 50);
+}
+
+function updateCount() {
+  let sub = `${state.messages.length} メッセージ`;
+  if (state.mode !== 'solo') {
+    const count = Object.keys(state.participants).length;
+    sub = `${count}人 · ${state.messages.length}件`;
+  }
+  document.getElementById('headerSub').textContent = sub;
+}
+
+function updateParticipantsDisplay() {
+  const count = Object.keys(state.participants).length;
+  const label = document.getElementById('participantsLabel');
+  if (label) label.textContent = `${count}人`;
+  updateCount();
+}
+
+function updateAiStatusDisplay() {
+  const el = document.getElementById('aiStatus');
+  if (state.aiEnabled) { el.textContent = 'AI ON'; el.classList.remove('off'); }
+  else { el.textContent = 'AI OFF'; el.classList.add('off'); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) {
+    e.preventDefault(); sendMessage();
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text || state.isLoading) return;
+  input.value = ''; input.style.height = 'auto';
+  const msg = { sender: state.userName, role: 'user', text: text, timestamp: Date.now() };
+  if (state.mode === 'solo') {
+    msg._key = 'local_' + Date.now();
+    state.messages.push(msg);
+    renderMessage(msg);
+    updateCount();
+    await callClaudeDirect(text);
+  } else {
+    try { await state.messagesRef.push(msg); }
+    catch(e) { showToast('送信エラー: ' + e.message, 'error'); }
+  }
+}
+
+async function callClaudeDirect(userText) {
+  state.isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
+  const enabled = state.aiCharacters.filter(c => c.enabled);
+  if (enabled.length === 0) {
+    showToast('有効なAIキャラがいません（設定で有効化してください）', 'error');
+    state.isLoading = false;
+    document.getElementById('sendBtn').disabled = false;
+    return;
+  }
+  const recent = state.messages.slice(-5);
+  const lastMsg = recent[recent.length - 1];
+  const eligible = getEligibleCharacters(lastMsg);
+  const candidates = eligible.length > 0 ? eligible : enabled;
+
+  const typingEl = showTypingIndicator();
+  try {
+    let chosen = null;
+    if (candidates.length === 1) {
+      chosen = candidates[0];
+    } else {
+      const chosenId = await askUnifiedJudge(candidates, recent);
+      chosen = state.aiCharacters.find(c => c.id === chosenId) || candidates[0];
+    }
+    const reply = await generateCharacterReply(chosen);
+    typingEl?.remove();
+    if (reply) {
+      const aiMsg = {
+        sender: chosen.name,
+        role: 'assistant',
+        aiId: chosen.id,
+        aiEmoji: chosen.emoji,
+        text: reply,
+        timestamp: Date.now(),
+        _key: 'local_ai_' + Date.now()
+      };
+      state.messages.push(aiMsg);
+      state.aiLastTimestamps[chosen.id] = Date.now();
+      renderMessage(aiMsg);
+      updateCount();
+    } else {
+      showToast('返答が空でした', 'error');
+    }
+  } catch(e) {
+    typingEl?.remove();
+    showToast('通信エラー: ' + e.message, 'error');
+  }
+  state.isLoading = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+function showTypingIndicator() {
+  const el = document.createElement('div');
+  el.className = 'message ai';
+  el.id = 'typing_' + Date.now();
+  el.innerHTML = `<div class="msg-label"><span class="name">🎭 AI</span></div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+  return el;
+}
+
+function scheduleAiInterrupt() {
+  if (!state.isHost || !state.aiEnabled) return;
+  if (state.aiInterruptTimer) clearTimeout(state.aiInterruptTimer);
+  state.aiInterruptTimer = setTimeout(() => { runAiInterruptJudge(); }, 2500);
+}
+
+function getEligibleCharacters(lastMsg) {
+  const now = Date.now();
+  return state.aiCharacters.filter(c => {
+    if (!c.enabled) return false;
+    const lastTs = state.aiLastTimestamps[c.id] || 0;
+    if ((now - lastTs) / 1000 < (c.cooldown || 0)) return false;
+    if (lastMsg && lastMsg.aiId === c.id) return false;
+    return true;
+  });
+}
+
+function formatConvo(msgs) {
+  return msgs.map(m => {
+    const name = m.role === 'assistant' ? `${m.aiEmoji || '🤖'} ${m.sender}` : m.sender;
+    return `[${name}]: ${m.text}`;
+  }).join('\n');
+}
+
+async function runAiInterruptJudge() {
+  if (!state.isHost) { showDebug('❌ ホストじゃないのでスキップ'); return; }
+  if (!state.aiEnabled) { showDebug('❌ AI全体OFFなのでスキップ'); return; }
+  if (state.isAiThinking) { showDebug('⏳ 既に考え中なのでスキップ'); return; }
+  const recent = state.messages.slice(-5);
+  if (recent.length === 0) { showDebug('❌ 履歴なし'); return; }
+  const lastMsg = recent[recent.length - 1];
+
+  const eligible = getEligibleCharacters(lastMsg);
+  if (eligible.length === 0) { showDebug('⏰ 全AIがクールダウン中 or 無効'); return; }
+
+  state.isAiThinking = true;
+  showAiThinkingIndicator();
+  showDebug(`🤔 判定中... (候補: ${eligible.map(c => c.id).join(', ')})`);
+
+  try {
+    let chosenId = null;
+    try {
+      chosenId = await askUnifiedJudge(eligible, recent);
+      showDebug(`🤖 判定結果: ${chosenId || 'NONE'}`);
+    } catch(je) {
+      showDebug('🚨 判定APIエラー: ' + je.message);
+      hideAiThinkingIndicator();
+      state.isAiThinking = false;
+      return;
+    }
+
+    if (!chosenId || chosenId === 'NONE') {
+      hideAiThinkingIndicator();
+      state.isAiThinking = false;
+      return;
+    }
+    const chosen = state.aiCharacters.find(c => c.id === chosenId);
+    if (!chosen) {
+      showDebug('🚨 不明なキャラID');
+      hideAiThinkingIndicator();
+      state.isAiThinking = false;
+      return;
+    }
+
+    showDebug(`✍️ ${chosen.emoji} ${chosen.name} の返答生成中...`);
+    let reply = null;
+    try {
+      reply = await generateCharacterReply(chosen);
+    } catch(ge) {
+      showDebug('🚨 本返答APIエラー: ' + ge.message);
+      hideAiThinkingIndicator();
+      state.isAiThinking = false;
+      return;
+    }
+
+    hideAiThinkingIndicator();
+    if (reply) {
+      try {
+        await state.messagesRef.push({
+          sender: chosen.name,
+          role: 'assistant',
+          aiId: chosen.id,
+          aiEmoji: chosen.emoji,
+          text: reply,
+          timestamp: Date.now()
+        });
+        state.aiLastTimestamps[chosen.id] = Date.now();
+        showDebug('✅ 発言完了');
+      } catch(fe) {
+        showDebug('🚨 Firebase書き込みエラー: ' + fe.message);
+      }
+    } else {
+      showDebug('🚨 reply空');
+    }
+  } catch(e) {
+    console.error('AI interrupt error:', e);
+    showDebug('🚨 全体エラー: ' + e.message);
+    hideAiThinkingIndicator();
+  }
+  state.isAiThinking = false;
+}
+
+async function askUnifiedJudge(eligible, recentMsgs) {
+  const convo = formatConvo(recentMsgs);
+  const charList = eligible.map(c => {
+    const personality = (c.systemPrompt || '').slice(0, 80).replace(/\n/g, ' ');
+    return `- ${c.id} (${c.emoji} ${c.name}) [おしゃべり度:${CHATTINESS_LABELS[c.chattiness] || '普通'}] → ${personality}`;
+  }).join('\n');
+  const validIds = [...eligible.map(c => c.id), 'NONE'];
+  const system = `あなたは複数AIキャラクターの会話を仕切る進行役です。直近の会話を見て、次に発言すべきAIキャラクターを1つだけ選んでください。誰も発言すべきでない場合は NONE を選びます。\n\n選択基準:\n- 各キャラの「おしゃべり度」と性格を尊重する\n- 同じキャラが連続発言しないようにバランスを取る\n- 会話が成立しているなら無理に発言させずNONEでも良い\n- 直前がユーザー発言で、誰かが応答すべき空気なら選ぶ\n\n回答は必ず ${validIds.join(' / ')} のいずれか1単語のみ。説明は不要です。`;
+  const user = `利用可能キャラクター:\n${charList}\n\n直近の会話:\n${convo}\n\n次に発言すべきキャラクターは？`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: MODEL_IDS[state.judgeModel],
+      max_tokens: 16,
+      system,
+      messages: [{ role: 'user', content: user }]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'API error');
+  if (!data.content?.[0]) return null;
+  const answer = data.content[0].text.trim().toUpperCase();
+  for (const id of validIds) {
+    if (answer.includes(id.toUpperCase())) return id;
+  }
+  return null;
+}
+
+async function generateCharacterReply(character) {
+  const history = state.messages.slice(-20);
+  const convoText = formatConvo(history);
+  const namePrefix = `${character.emoji} ${character.name}`;
+  const otherChars = state.aiCharacters
+    .filter(c => c.id !== character.id && c.enabled)
+    .map(c => `${c.emoji} ${c.name}`)
+    .join(', ');
+  const system = `あなたの名前は「${character.name}」です。\n\n${character.systemPrompt}\n\nこれはグループチャットです。複数の人とAIキャラクター(${otherChars || 'なし'})が会話しています。各発言は [発言者名]: 内容 の形式で示されます。\nあなたは「${character.name}」として、会話の流れを読んで自然に一度だけ発言してください。[${namePrefix}]: のプレフィックスは付けず、発言内容のみを返してください。`;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: MODEL_IDS[state.replyModel],
+      max_tokens: 1024,
+      system,
+      messages: [{ role: 'user', content: convoText }]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'API error');
+  if (!data.content?.[0]) return null;
+  let reply = data.content[0].text.trim();
+  const escName = character.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escPrefix = namePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  reply = reply.replace(new RegExp(`^\\[?(${escPrefix}|${escName})\\]?:\\s*`, 'i'), '');
+  return reply;
+}
+
+function showDebug(msg) {
+  const el = document.createElement('div');
+  el.className = 'ai-thinking';
+  el.style.fontSize = '10px';
+  el.style.color = '#a78bfa';
+  el.style.padding = '4px 8px';
+  el.style.fontFamily = 'monospace';
+  el.textContent = msg;
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+  setTimeout(() => el.remove(), 10000);
+}
+
+function showAiThinkingIndicator() {
+  if (document.getElementById('aiThinking')) return;
+  const el = document.createElement('div');
+  el.id = 'aiThinking';
+  el.className = 'ai-thinking';
+  el.textContent = '🎭 AI判定中...';
+  document.getElementById('messages').appendChild(el);
+  scrollBottom();
+}
+
+function hideAiThinkingIndicator() {
+  document.getElementById('aiThinking')?.remove();
+}
+
+function onTopicChange() {
+  const newTopic = document.getElementById('topicInput').value.trim();
+  state.topic = newTopic;
+  if (state.mode !== 'solo' && state.metaRef) {
+    state.metaRef.update({ topic: newTopic }).catch(e => console.error(e));
+  }
+  saveLastRoom();
+}
+
+function openSettings() {
+  if (state.isHost) {
+    document.getElementById('aiSettingsSection').style.display = '';
+    document.getElementById('aiEnabledToggle').checked = state.aiEnabled;
+    renderCharactersUI();
+    highlightSegment('judge', state.judgeModel);
+    highlightSegment('reply', state.replyModel);
+  } else {
+    document.getElementById('aiSettingsSection').style.display = 'none';
+  }
+  if (state.isHost) {
+    document.getElementById('ghSettingsSection').style.display = '';
+    document.getElementById('s_ghToken').value = state.ghToken ? '（保存済み）' : '';
+    document.getElementById('s_ghUser').value = state.ghUser || '';
+    document.getElementById('s_ghRepo').value = state.ghRepo || '';
+    document.getElementById('s_ghFolder').value = state.ghFolder || 'claude-logs';
+  } else {
+    document.getElementById('ghSettingsSection').style.display = 'none';
+  }
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function closeSettingsOutside(e) {
+  if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('show');
+}
+
+function renderCharactersUI() {
+  const container = document.getElementById('charactersContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  state.aiCharacters.forEach((char, idx) => {
+    const card = document.createElement('div');
+    card.className = 'setup-card';
+    card.dataset.charIdx = idx;
+    card.innerHTML = `
+      <h2>${escapeHtml(char.emoji)} AIキャラクター${idx + 1}</h2>
+
+      <div class="toggle-row">
+        <div>
+          <div class="label">このキャラを有効化</div>
+          <div class="desc">OFFにするとこのキャラは発言しません</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-field="enabled" ${char.enabled ? 'checked' : ''}>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>絵文字</label>
+        <input type="text" maxlength="4" data-field="emoji" value="${escapeHtml(char.emoji)}" placeholder="🤖">
+      </div>
+
+      <div class="field">
+        <label>名前</label>
+        <input type="text" data-field="name" value="${escapeHtml(char.name)}" placeholder="Claude">
+      </div>
+
+      <div class="field">
+        <label>キャラクター（システムプロンプト）</label>
+        <textarea rows="4" data-field="systemPrompt" placeholder="性格や話し方">${escapeHtml(char.systemPrompt)}</textarea>
+      </div>
+
+      <div class="slider-field">
+        <div class="slider-header">
+          <span class="label">おしゃべり度</span>
+          <span class="value" data-display="chattiness">${CHATTINESS_LABELS[char.chattiness] || '普通'}</span>
+        </div>
+        <input type="range" min="0" max="2" step="1" value="${char.chattiness}" data-field="chattiness">
+        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted);">
+          <span>控えめ</span><span>普通</span><span>おしゃべり</span>
+        </div>
+      </div>
+
+      <div class="slider-field">
+        <div class="slider-header">
+          <span class="label">クールダウン</span>
+          <span class="value" data-display="cooldown">${char.cooldown}秒</span>
+        </div>
+        <input type="range" min="0" max="60" step="5" value="${char.cooldown}" data-field="cooldown">
+      </div>
+    `;
+    card.querySelectorAll('input[type="range"]').forEach(input => {
+      input.addEventListener('input', () => {
+        const field = input.dataset.field;
+        const display = card.querySelector(`[data-display="${field}"]`);
+        if (display) {
+          if (field === 'chattiness') display.textContent = CHATTINESS_LABELS[parseInt(input.value)];
+          else if (field === 'cooldown') display.textContent = `${input.value}秒`;
+        }
+      });
+    });
+    container.appendChild(card);
+  });
+}
+
+function selectModel(type, model) {
+  if (type === 'judge') state.judgeModel = model;
+  else state.replyModel = model;
+  highlightSegment(type, model);
+}
+
+function highlightSegment(type, model) {
+  const seg = document.querySelector(`#aiSettingsSection .segment[data-segment="${type}"]`);
+  if (!seg) return;
+  seg.querySelectorAll('button[data-model]').forEach(b => {
+    b.classList.toggle('active', b.dataset.model === model);
+  });
+}
+
+function updateAiEnabled() {
+  state.aiEnabled = document.getElementById('aiEnabledToggle').checked;
+  updateAiStatusDisplay();
+  if (state.metaRef) {
+    state.metaRef.update({ aiEnabled: state.aiEnabled }).catch(e => console.error(e));
+  }
+}
+
+function readCharactersFromUI() {
+  const container = document.getElementById('charactersContainer');
+  if (!container) return state.aiCharacters;
+  const cards = container.querySelectorAll('[data-char-idx]');
+  cards.forEach(card => {
+    const idx = parseInt(card.dataset.charIdx);
+    if (isNaN(idx) || !state.aiCharacters[idx]) return;
+    const char = state.aiCharacters[idx];
+    const get = (field) => card.querySelector(`[data-field="${field}"]`);
+    char.enabled = !!get('enabled')?.checked;
+    char.emoji = (get('emoji')?.value || char.emoji || '🤖').trim() || '🤖';
+    char.name = (get('name')?.value || char.name || `AI${idx + 1}`).trim() || `AI${idx + 1}`;
+    char.systemPrompt = (get('systemPrompt')?.value || '').trim() || char.systemPrompt;
+    char.chattiness = parseInt(get('chattiness')?.value ?? char.chattiness);
+    char.cooldown = parseInt(get('cooldown')?.value ?? char.cooldown);
+  });
+  return state.aiCharacters;
+}
+
+async function saveSettings() {
+  if (state.isHost) {
+    readCharactersFromUI();
+    if (state.metaRef) {
+      await state.metaRef.update({
+        aiCharacters: state.aiCharacters,
+        judgeModel: state.judgeModel,
+        replyModel: state.replyModel,
+        aiEnabled: state.aiEnabled,
+      }).catch(e => console.error(e));
+    }
+    const ghToken = document.getElementById('s_ghToken').value.trim();
+    if (ghToken && ghToken !== '（保存済み）') state.ghToken = ghToken;
+    state.ghUser = document.getElementById('s_ghUser').value.trim() || state.ghUser;
+    state.ghRepo = document.getElementById('s_ghRepo').value.trim() || state.ghRepo;
+    state.ghFolder = document.getElementById('s_ghFolder').value.trim() || 'claude-logs';
+    const key = state.mode === 'solo' ? 'cl_solo' : 'cl_host';
+    const cfg = loadFromStorage(key) || {};
+    cfg.ghToken = state.ghToken;
+    cfg.ghUser = state.ghUser;
+    cfg.ghRepo = state.ghRepo;
+    cfg.ghFolder = state.ghFolder;
+    cfg.aiCharacters = state.aiCharacters;
+    cfg.judgeModel = state.judgeModel;
+    cfg.replyModel = state.replyModel;
+    saveToStorage(key, cfg);
+    if (state.ghToken && state.ghUser && state.ghRepo) {
+      document.getElementById('saveBtn').style.display = '';
+    }
+  }
+  closeModal('settingsModal');
+  showToast('✅ 設定を保存しました', 'success');
+}
+
+async function leaveRoom() {
+  const hasGh = state.isHost && state.ghToken && state.ghUser && state.ghRepo && state.messages && state.messages.length > 0;
+  const confirmMsg = hasGh
+    ? 'ルームを退出しますか？\n会話はGitHubに自動保存されます。'
+    : 'ルームを退出しますか？';
+  if (!confirm(confirmMsg)) return;
+
+  if (hasGh) {
+    try {
+      showToast('GitHubに保存中...', '');
+      await saveToGitHub();
+    } catch(e) {
+      console.warn('Auto-save failed', e);
+    }
+  }
+
+  try {
+    if (state.participantsRef && state.userName) {
+      await state.participantsRef.child(state.userName).remove();
+    }
+  } catch(e) { console.error('Leave error:', e); }
+  if (state.messagesRef) state.messagesRef.off();
+  if (state.participantsRef) state.participantsRef.off();
+  if (state.metaRef) state.metaRef.off();
+  state.messages = [];
+  state.participants = {};
+  state.roomId = null;
+  state.mode = null;
+  clearLastRoom();
+  document.getElementById('messages').innerHTML = '';
+  closeModal('settingsModal');
+  goto('home');
+  checkResumeButton();
+  showToast('退出しました', 'success');
+}
+
+function clearSettings() {
+  if (!confirm('全ての設定をリセットしますか？（APIキーなどが消えます）')) return;
+  localStorage.removeItem('cl_solo');
+  localStorage.removeItem('cl_host');
+  localStorage.removeItem('cl_join');
+  closeModal('settingsModal');
+  goto('home');
+  showToast('設定をリセットしました', 'success');
+}
+
+function openInvite() {
+  if (!state.roomId) return;
+  document.getElementById('inviteRoomId').textContent = state.roomId;
+  document.getElementById('inviteModal').classList.add('show');
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 コピーしました', 'success');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('📋 コピーしました', 'success');
+  }
+}
+
+function copyInviteMessage() {
+  const baseUrl = window.location.href.split('?')[0].split('#')[0];
+  const inviteUrl = `${baseUrl}?room=${state.roomId}`;
+  const msg = `🤖 Claude Loggerへの招待
+
+下のリンクを開いて、お名前を入れるだけで参加できます👇
+${inviteUrl}
+
+（ルームID: ${state.roomId}）`;
+  copyText(msg);
+}
+
+async function saveToGitHub() {
+  if (!state.ghToken || !state.ghUser || !state.ghRepo) {
+    showToast('GitHub設定が不足しています', 'error'); return;
+  }
+  if (state.messages.length === 0) { showToast('保存する会話がありません', 'error'); return; }
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = '...'; btn.disabled = true;
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5).replace(':','');
+  const topic = state.topic || '会話ログ';
+  const safeTopic = topic.replace(/[^\w\u3040-\u30FF\u4E00-\u9FFF]/g,'-');
+  const fileName = `${dateStr}_${timeStr}_${safeTopic}.md`;
+  const filePath = `${state.ghFolder}/${fileName}`;
+  const participantsList = state.mode !== 'solo' ? Object.keys(state.participants).join(', ') : state.userName;
+  const aiList = state.aiCharacters.filter(c => c.enabled).map(c => `${c.emoji} ${c.name}`).join(', ');
+  let md = `# ${topic}\n\n## メタ情報\n\n- **日時**: ${now.toLocaleString('ja-JP')}\n- **モード**: ${state.mode === 'solo' ? 'ソロ' : 'グループ'}\n- **参加者**: ${participantsList}\n- **AIキャラクター**: ${aiList || '(無効)'}\n- **メッセージ数**: ${state.messages.length}\n- **タグ**: #claude #ai-log #${safeTopic}\n\n---\n\n## 会話ログ\n\n`;
+  for (const msg of state.messages) {
+    const name = msg.role === 'assistant'
+      ? `${msg.aiEmoji || '🤖'} **${msg.sender || 'AI'}**`
+      : `**${msg.sender}**`;
+    md += `### ${name}\n\n${msg.text}\n\n`;
+  }
+  md += `---\n*Saved by Claude Logger 3*\n`;
+  const utf8Bytes = new TextEncoder().encode(md);
+  let binary = '';
+  for (let i = 0; i < utf8Bytes.length; i++) binary += String.fromCharCode(utf8Bytes[i]);
+  const content = btoa(binary);
+  try {
+    let sha = null;
+    const checkRes = await fetch(`https://api.github.com/repos/${state.ghUser}/${state.ghRepo}/contents/${encodeURIComponent(filePath)}`,
+      { headers: { 'Authorization': `token ${state.ghToken}` } });
+    if (checkRes.ok) { sha = (await checkRes.json()).sha; }
+    const res = await fetch(`https://api.github.com/repos/${state.ghUser}/${state.ghRepo}/contents/${encodeURIComponent(filePath)}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${state.ghToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `📝 ${topic} - ${dateStr}`, content, ...(sha&&{sha}) })
+    });
+    if (res.ok) showToast('✅ GitHubに保存しました！', 'success');
+    else { const err = await res.json(); showToast('❌ ' + (err.message||'保存失敗'), 'error'); }
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+  btn.textContent = '💾'; btn.disabled = false;
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function handleUrlParams() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl && /^\d{6}$/.test(roomFromUrl)) {
+      goto('joinSetup');
+      setTimeout(() => {
+        const input = document.getElementById('join_roomId');
+        if (input) input.value = roomFromUrl;
+      }, 100);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function initializeScreens() {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = 'none';
+  });
+  const homeEl = document.getElementById('home');
+  if (homeEl) {
+    homeEl.classList.add('active');
+    homeEl.style.display = 'flex';
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeScreens);
+} else {
+  initializeScreens();
+}
+
+window.addEventListener('load', () => {
+  initializeScreens();
+  const handledByUrl = handleUrlParams();
+  checkResumeButton();
+  if (handledByUrl) {
+    const btn = document.getElementById('resumeBtn');
+    if (btn) btn.style.display = 'none';
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  if (state.participantsRef && state.userName && !state.isHost) {
+    try { state.participantsRef.child(state.userName).remove(); } catch(e) {}
+  }
+});
+</script>
+</body>
+</html>
+
