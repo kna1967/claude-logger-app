@@ -522,6 +522,17 @@
             <button type="button" data-model="sonnet" onclick="selectModel('reply', 'sonnet')">Sonnet(高品質)</button>
           </div>
         </div>
+
+        <div class="slider-field">
+          <div class="slider-header">
+            <span class="label">連続AI最大数</span>
+            <span class="value" id="maxConsecutiveAiLabel">3回</span>
+          </div>
+          <input type="range" id="s_maxConsecutiveAi" min="0" max="10" step="1" value="3" oninput="updateMaxConsecutiveAiLabel()">
+          <div style="font-size:10px; color:var(--text-muted); margin-top: 4px;">
+            0=AI同士禁止 / 大きいほどAIが盛り上がる
+          </div>
+        </div>
       </div>
 
       <div id="charactersContainer"></div>
@@ -658,6 +669,7 @@ const state = {
   aiCharacters: JSON.parse(JSON.stringify(DEFAULT_CHARACTERS)),
   aiLastTimestamps: { ai1: 0, ai2: 0, ai3: 0 },
   aiEnabled: true,
+  maxConsecutiveAi: 3,
   judgeModel: 'haiku',
   replyModel: 'sonnet',
 
@@ -771,6 +783,7 @@ async function resumeLastRoom() {
     state.ghRepo = cfg.ghRepo;
     state.ghFolder = cfg.ghFolder || 'claude-logs';
     if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
+    if (typeof cfg.maxConsecutiveAi === 'number') state.maxConsecutiveAi = cfg.maxConsecutiveAi;
     if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
     if (cfg.replyModel) state.replyModel = cfg.replyModel;
     state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -801,6 +814,7 @@ async function resumeLastRoom() {
     state.ghRepo = cfg.ghRepo;
     state.ghFolder = cfg.ghFolder || 'claude-logs';
     if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
+    if (typeof cfg.maxConsecutiveAi === 'number') state.maxConsecutiveAi = cfg.maxConsecutiveAi;
     if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
     if (cfg.replyModel) state.replyModel = cfg.replyModel;
     state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -910,6 +924,7 @@ function startSolo() {
   state.ghRepo = cfg.ghRepo;
   state.ghFolder = cfg.ghFolder;
   if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
+  if (typeof saved.maxConsecutiveAi === 'number') state.maxConsecutiveAi = saved.maxConsecutiveAi;
   if (saved.judgeModel) state.judgeModel = saved.judgeModel;
   if (saved.replyModel) state.replyModel = saved.replyModel;
   state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -948,6 +963,7 @@ async function createRoom() {
   state.ghRepo = cfg.ghRepo;
   state.ghFolder = cfg.ghFolder;
   if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
+  if (typeof saved.maxConsecutiveAi === 'number') state.maxConsecutiveAi = saved.maxConsecutiveAi;
   if (saved.judgeModel) state.judgeModel = saved.judgeModel;
   if (saved.replyModel) state.replyModel = saved.replyModel;
   state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -962,6 +978,7 @@ async function createRoom() {
       topic: '',
       aiEnabled: true,
       aiCharacters: state.aiCharacters,
+      maxConsecutiveAi: state.maxConsecutiveAi,
       judgeModel: state.judgeModel,
       replyModel: state.replyModel,
     });
@@ -1032,7 +1049,7 @@ function subscribeToRoom() {
     state.messages.push(msg);
     renderMessage(msg);
     updateCount();
-    if (state.isHost && state.aiEnabled && msg.role !== 'assistant') {
+    if (state.isHost && state.aiEnabled) {
       scheduleAiInterrupt();
     }
   });
@@ -1052,6 +1069,9 @@ function subscribeToRoom() {
     }
     if (Array.isArray(meta.aiCharacters) && meta.aiCharacters.length > 0) {
       state.aiCharacters = meta.aiCharacters.map(c => ({ ...c }));
+    }
+    if (typeof meta.maxConsecutiveAi === 'number') {
+      state.maxConsecutiveAi = meta.maxConsecutiveAi;
     }
     if (!state.isHost) {
       state.aiEnabled = meta.aiEnabled !== false;
@@ -1268,6 +1288,15 @@ function formatConvo(msgs) {
   }).join('\n');
 }
 
+function countTrailingAiMessages() {
+  let count = 0;
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    if (state.messages[i].role === 'assistant') count++;
+    else break;
+  }
+  return count;
+}
+
 async function runAiInterruptJudge() {
   if (!state.isHost) { showDebug('❌ ホストじゃないのでスキップ'); return; }
   if (!state.aiEnabled) { showDebug('❌ AI全体OFFなのでスキップ'); return; }
@@ -1275,6 +1304,13 @@ async function runAiInterruptJudge() {
   const recent = state.messages.slice(-5);
   if (recent.length === 0) { showDebug('❌ 履歴なし'); return; }
   const lastMsg = recent[recent.length - 1];
+
+  const trailingAi = countTrailingAiMessages();
+  const maxAi = (state.maxConsecutiveAi ?? 3);
+  if (lastMsg.role === 'assistant') {
+    if (maxAi <= 0) { showDebug('🚫 AI同士の会話は禁止設定'); return; }
+    if (trailingAi >= maxAi) { showDebug(`🛑 連続AI上限到達 (${trailingAi}/${maxAi})`); return; }
+  }
 
   const eligible = getEligibleCharacters(lastMsg);
   if (eligible.length === 0) { showDebug('⏰ 全AIがクールダウン中 or 無効'); return; }
@@ -1455,6 +1491,8 @@ function openSettings() {
   if (state.isHost) {
     document.getElementById('aiSettingsSection').style.display = '';
     document.getElementById('aiEnabledToggle').checked = state.aiEnabled;
+    document.getElementById('s_maxConsecutiveAi').value = state.maxConsecutiveAi;
+    updateMaxConsecutiveAiLabel();
     renderCharactersUI();
     highlightSegment('judge', state.judgeModel);
     highlightSegment('reply', state.replyModel);
@@ -1548,6 +1586,12 @@ function renderCharactersUI() {
   });
 }
 
+function updateMaxConsecutiveAiLabel() {
+  const v = parseInt(document.getElementById('s_maxConsecutiveAi').value);
+  const label = v === 0 ? '禁止' : `${v}回`;
+  document.getElementById('maxConsecutiveAiLabel').textContent = label;
+}
+
 function selectModel(type, model) {
   if (type === 'judge') state.judgeModel = model;
   else state.replyModel = model;
@@ -1592,9 +1636,12 @@ function readCharactersFromUI() {
 async function saveSettings() {
   if (state.isHost) {
     readCharactersFromUI();
+    state.maxConsecutiveAi = parseInt(document.getElementById('s_maxConsecutiveAi').value);
+    if (isNaN(state.maxConsecutiveAi)) state.maxConsecutiveAi = 3;
     if (state.metaRef) {
       await state.metaRef.update({
         aiCharacters: state.aiCharacters,
+        maxConsecutiveAi: state.maxConsecutiveAi,
         judgeModel: state.judgeModel,
         replyModel: state.replyModel,
         aiEnabled: state.aiEnabled,
@@ -1612,6 +1659,7 @@ async function saveSettings() {
     cfg.ghRepo = state.ghRepo;
     cfg.ghFolder = state.ghFolder;
     cfg.aiCharacters = state.aiCharacters;
+    cfg.maxConsecutiveAi = state.maxConsecutiveAi;
     cfg.judgeModel = state.judgeModel;
     cfg.replyModel = state.replyModel;
     saveToStorage(key, cfg);
