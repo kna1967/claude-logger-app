@@ -533,6 +533,17 @@
             0=AI同士禁止 / 大きいほどAIが盛り上がる
           </div>
         </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="label">デバッグログ表示</div>
+            <div class="desc">ON時は判定中・エラー等を画面に表示。直近20件は OFF中も保持され、ON にした瞬間まとめて表示</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="s_debugMode" onchange="updateDebugMode()">
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
 
       <div id="charactersContainer"></div>
@@ -670,6 +681,8 @@ const state = {
   aiLastTimestamps: { ai1: 0, ai2: 0, ai3: 0 },
   aiEnabled: true,
   maxConsecutiveAi: 3,
+  debugMode: false,
+  debugBuffer: [],
   judgeModel: 'haiku',
   replyModel: 'sonnet',
 
@@ -784,6 +797,7 @@ async function resumeLastRoom() {
     state.ghFolder = cfg.ghFolder || 'claude-logs';
     if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
     if (typeof cfg.maxConsecutiveAi === 'number') state.maxConsecutiveAi = cfg.maxConsecutiveAi;
+    if (typeof cfg.debugMode === 'boolean') state.debugMode = cfg.debugMode;
     if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
     if (cfg.replyModel) state.replyModel = cfg.replyModel;
     state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -815,6 +829,7 @@ async function resumeLastRoom() {
     state.ghFolder = cfg.ghFolder || 'claude-logs';
     if (Array.isArray(cfg.aiCharacters) && cfg.aiCharacters.length > 0) state.aiCharacters = cfg.aiCharacters.map(c => ({ ...c }));
     if (typeof cfg.maxConsecutiveAi === 'number') state.maxConsecutiveAi = cfg.maxConsecutiveAi;
+    if (typeof cfg.debugMode === 'boolean') state.debugMode = cfg.debugMode;
     if (cfg.judgeModel) state.judgeModel = cfg.judgeModel;
     if (cfg.replyModel) state.replyModel = cfg.replyModel;
     state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -925,6 +940,7 @@ function startSolo() {
   state.ghFolder = cfg.ghFolder;
   if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
   if (typeof saved.maxConsecutiveAi === 'number') state.maxConsecutiveAi = saved.maxConsecutiveAi;
+  if (typeof saved.debugMode === 'boolean') state.debugMode = saved.debugMode;
   if (saved.judgeModel) state.judgeModel = saved.judgeModel;
   if (saved.replyModel) state.replyModel = saved.replyModel;
   state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -964,6 +980,7 @@ async function createRoom() {
   state.ghFolder = cfg.ghFolder;
   if (Array.isArray(saved.aiCharacters) && saved.aiCharacters.length > 0) state.aiCharacters = saved.aiCharacters.map(c => ({ ...c }));
   if (typeof saved.maxConsecutiveAi === 'number') state.maxConsecutiveAi = saved.maxConsecutiveAi;
+  if (typeof saved.debugMode === 'boolean') state.debugMode = saved.debugMode;
   if (saved.judgeModel) state.judgeModel = saved.judgeModel;
   if (saved.replyModel) state.replyModel = saved.replyModel;
   state.aiLastTimestamps = { ai1: 0, ai2: 0, ai3: 0 };
@@ -1462,17 +1479,50 @@ async function generateCharacterReply(character) {
   return reply;
 }
 
-function showDebug(msg) {
+function formatDebugTime(ts) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function appendDebugToUi(timestamp, msg, autoRemove) {
   const el = document.createElement('div');
-  el.className = 'ai-thinking';
+  el.className = 'ai-thinking debug-log';
   el.style.fontSize = '10px';
   el.style.color = '#a78bfa';
   el.style.padding = '4px 8px';
   el.style.fontFamily = 'monospace';
-  el.textContent = msg;
+  el.textContent = `[${formatDebugTime(timestamp)}] ${msg}`;
   document.getElementById('messages').appendChild(el);
   scrollBottom();
-  setTimeout(() => el.remove(), 10000);
+  if (autoRemove) setTimeout(() => el.remove(), 10000);
+}
+
+function showDebug(msg) {
+  const ts = Date.now();
+  console.log(`[claude-logger-3] ${msg}`);
+  if (!Array.isArray(state.debugBuffer)) state.debugBuffer = [];
+  state.debugBuffer.push({ ts, msg });
+  if (state.debugBuffer.length > 20) {
+    state.debugBuffer.splice(0, state.debugBuffer.length - 20);
+  }
+  if (state.debugMode) appendDebugToUi(ts, msg, true);
+}
+
+function updateDebugMode() {
+  state.debugMode = document.getElementById('s_debugMode').checked;
+  if (state.debugMode) {
+    document.querySelectorAll('.debug-log').forEach(el => el.remove());
+    const buf = Array.isArray(state.debugBuffer) ? state.debugBuffer.slice() : [];
+    if (buf.length === 0) {
+      appendDebugToUi(Date.now(), '（バッファに記録なし）', false);
+    } else {
+      buf.forEach(entry => appendDebugToUi(entry.ts, entry.msg, false));
+    }
+  }
+  const cfg = loadFromStorage(state.mode === 'solo' ? 'cl_solo' : 'cl_host') || {};
+  cfg.debugMode = state.debugMode;
+  saveToStorage(state.mode === 'solo' ? 'cl_solo' : 'cl_host', cfg);
 }
 
 function showAiThinkingIndicator() {
@@ -1515,6 +1565,7 @@ function openSettings() {
     document.getElementById('aiSettingsSection').style.display = '';
     document.getElementById('aiEnabledToggle').checked = state.aiEnabled;
     document.getElementById('s_maxConsecutiveAi').value = state.maxConsecutiveAi;
+    document.getElementById('s_debugMode').checked = !!state.debugMode;
     updateMaxConsecutiveAiLabel();
     renderCharactersUI();
     highlightSegment('judge', state.judgeModel);
